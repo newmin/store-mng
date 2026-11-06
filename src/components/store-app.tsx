@@ -39,7 +39,8 @@ import {
 import { useStore } from "@/lib/use-store";
 import { authFetch, sharedMode, supabase } from "@/lib/client";
 import { brand } from "@/lib/brand";
-import { BrandMark, BrandWelcome, StoreInstagramLink } from "./store-brand";
+import { Notice } from "./notice";
+import { BrandMark, BrandWelcome } from "./store-brand";
 import { menuCategories } from "@/lib/menu-catalog";
 import { RiceThumbnail } from "./order-pickers";
 import type { Command, Material, Order, Plan, Product, Lot } from "@/lib/types";
@@ -327,7 +328,7 @@ export default function StoreApp() {
   }) {
     return (
       <article
-        className={`order-card ${o.status === "cancelled" ? "cancelled" : ""}`}
+        className={`order-card ${o.status === "cancelled" ? "cancelled" : o.status === "picked" ? "picked" : ""}`}
       >
         <div className="order-time">
           <strong>{o.time}</strong>
@@ -343,7 +344,7 @@ export default function StoreApp() {
             <Pill
               tone={
                 o.status === "picked"
-                  ? "green"
+                  ? "gray"
                   : o.status === "cancelled"
                     ? "gray"
                     : "orange"
@@ -563,20 +564,13 @@ export default function StoreApp() {
               </button>
             </div>
           )}
-          {error && (
-            <div role="alert" className="error-banner">
-              <TriangleAlert size={18} />
-              <span>{error}</span>
-              <button
-                aria-label="오류 메시지 닫기"
-                className="icon-button"
-                onClick={() => setError("")}
-              >
-                <X size={16} />
-              </button>
-            </div>
+          {error && !modal && (
+            <Notice message={error} onDismiss={() => setError("")} />
           )}
           {view === "inventory" &&
+            !error &&
+            !toast &&
+            !modal &&
             state.products.some(
               (p) =>
                 recipeIssue(p, state) &&
@@ -589,10 +583,10 @@ export default function StoreApp() {
                       o.lines.some((l) => l.productId === p.id),
                   )),
             ) && (
-              <div className="error-banner" role="alert">
-                생산 기준 미등록 메뉴는 재료 계산에서 제외됩니다. 매장 설정에서
-                생산량·레시피를 등록해 주세요.
-              </div>
+              <Notice
+                kind="warning"
+                message="생산 기준 미등록 메뉴는 재료 계산에서 제외됩니다. 매장 설정에서 생산량·레시피를 등록해 주세요."
+              />
             )}
           {view !== "settings" && (
             <div className="date-toolbar">
@@ -1397,7 +1391,6 @@ export default function StoreApp() {
           )}
           {view === "settings" && (
             <>
-              <StoreInstagramLink />
               <section className="panel">
                 <div className="panel-heading">
                   <h2>메뉴와 생산 기준</h2>
@@ -1593,10 +1586,7 @@ export default function StoreApp() {
         </button>
       </nav>
       {toast && (
-        <div className="toast" role="status">
-          <Check size={17} />
-          {toast}
-        </div>
+        <Notice kind="success" message={toast} onDismiss={() => setToast("")} />
       )}
       {modal && (
         <ModalShell
@@ -1626,11 +1616,7 @@ export default function StoreApp() {
           busy={busy}
           onClose={() => setModal(null)}
         >
-          {error && (
-            <div className="error-banner" role="alert">
-              {error}
-            </div>
-          )}
+          {error && <Notice message={error} onDismiss={() => setError("")} />}
           {modal.type === "order" && (
             <OrderForm
               state={state}
@@ -1819,12 +1805,14 @@ function Login({
               placeholder="8자 이상 입력하세요"
             />
           </label>
-          {error && (
-            <p role="alert" className="danger-text">
-              {error}
-            </p>
+          {error && <Notice message={error} onDismiss={() => setError("")} />}
+          {message && (
+            <Notice
+              kind="success"
+              message={message}
+              onDismiss={() => setMessage("")}
+            />
           )}
-          {message && <p role="status">{message}</p>}
           <button className="button primary" disabled={busy}>
             {busy ? "처리 중…" : recovery ? "비밀번호 저장" : "로그인"}
             <ArrowRight size={17} />

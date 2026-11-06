@@ -1,6 +1,8 @@
 "use client";
 import { useState, type FormEvent } from "react";
-import { Plus, Trash2, Upload, Info } from "lucide-react";
+import { Notice } from "./notice";
+import { formatPhone, validPhone } from "@/lib/order-input";
+import { Plus, Trash2, Info } from "lucide-react";
 import {
   ChannelPicker,
   MenuPicker,
@@ -15,7 +17,6 @@ import {
   findMenuPhoto,
   menuCategories,
 } from "@/lib/menu-catalog";
-import { authFetch, sharedMode } from "@/lib/client";
 import { uid, today } from "@/lib/dates";
 import { materialUsage, orderPieces, requirements } from "@/lib/calculations";
 import type {
@@ -60,11 +61,10 @@ export function OrderForm({
   const [kind, setKind] = useState<Order["kind"]>(order?.kind || "single");
   const [lines, setLines] = useState<OrderLine[]>(order?.lines || []);
   const [channel, setChannel] = useState(order?.channel || "카카오톡");
+  const [phone, setPhone] = useState(order?.phone || "");
   const [time, setTime] = useState(order?.time || "10:00");
   const [menuPicker, setMenuPicker] = useState<number | "add" | null>(null);
-  const [boxes, setBoxes] = useState(order?.boxes || 1);
-  const [upload, setUpload] = useState<File | null>(null);
-  const [imagePath, setImagePath] = useState(order?.imagePath || "");
+  const [boxes, setBoxes] = useState(order?.boxes || 0);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const change = (i: number, patch: Partial<OrderLine>) =>
@@ -95,31 +95,15 @@ export function OrderForm({
       setFormError("주문할 떡을 먼저 담아 주세요.");
       return;
     }
+    if (!validPhone(phone)) {
+      setFormError(
+        "연락처를 확인해 주세요. 예: 010-1234-5678 (연락처가 없으면 비워 두세요.)",
+      );
+      return;
+    }
     setSaving(true);
     try {
       const f = new FormData(e.currentTarget);
-      let path = imagePath;
-      if (upload) {
-        if (sharedMode) {
-          const body = new FormData();
-          body.append("file", upload);
-          path = (await authFetch("/api/images", { method: "POST", body }))
-            .path;
-        } else {
-          if (upload.size > 1024 * 1024)
-            throw new Error("체험 모드 이미지는 최대 1MB입니다.");
-          const data = await new Promise<string>((resolve, reject) => {
-            const r = new FileReader();
-            r.onload = () => resolve(String(r.result));
-            r.onerror = reject;
-            r.readAsDataURL(upload);
-          });
-          path = `demo:${uid()}`;
-          localStorage.setItem(`tteokdam-image:${path}`, data);
-        }
-        setImagePath(path);
-        setUpload(null);
-      }
       await save({
         type: "saveOrder",
         order: {
@@ -133,7 +117,7 @@ export function OrderForm({
           boxes: kind === "gift" ? boxes : 1,
           lines,
           sticker: field(f, "sticker"),
-          imagePath: path || undefined,
+          imagePath: order?.imagePath,
           status: order?.status || "reserved",
           updatedAt: new Date().toISOString(),
         },
@@ -148,12 +132,18 @@ export function OrderForm({
     lines.reduce((s, l) => s + l.quantity * l.piecesPerUnit, 0) *
     (kind === "gift" ? boxes : 1);
   return (
-    <form onSubmit={submit}>
+    <form
+      onSubmit={submit}
+      onInvalidCapture={(e) => {
+        e.preventDefault();
+        setFormError(
+          "필수 입력값을 확인해 주세요. 고객명·수령 날짜·수량을 올바르게 입력해야 합니다.",
+        );
+      }}
+    >
       <fieldset disabled={saving}>
         {formError && (
-          <p className="error-banner" role="alert">
-            {formError}
-          </p>
+          <Notice message={formError} onDismiss={() => setFormError("")} />
         )}
         <div className="form-grid">
           <label>
@@ -171,10 +161,16 @@ export function OrderForm({
             <input
               name="phone"
               type="tel"
-              defaultValue={order?.phone}
+              value={phone}
+              onChange={(e) => setPhone(formatPhone(e.target.value))}
+              inputMode="tel"
+              autoComplete="tel-national"
               placeholder="010-0000-0000"
-              maxLength={50}
+              maxLength={14}
             />
+            <small className="field-help">
+              숫자만 입력하면 -를 붙여 드려요. 연락처가 없으면 비워 두세요.
+            </small>
           </label>
           <label>
             수령 날짜{" "}
@@ -200,7 +196,8 @@ export function OrderForm({
                   type="number"
                   min={1}
                   max={1000000}
-                  value={boxes}
+                  value={boxes || ""}
+                  placeholder="예: 3"
                   onChange={(e) => setBoxes(Number(e.target.value))}
                   required
                 />{" "}
@@ -306,37 +303,6 @@ export function OrderForm({
             maxLength={2000}
           />
         </label>
-        <label className="upload-label">
-          <Upload size={18} />
-          {upload?.name ||
-            (imagePath ? "참고 이미지 변경" : "스티커 참고 이미지 첨부")}
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f && f.size > 5 * 1024 * 1024) {
-                e.target.setCustomValidity("최대 5MB입니다.");
-                e.target.reportValidity();
-              } else {
-                e.target.setCustomValidity("");
-                setUpload(f || null);
-              }
-            }}
-          />
-        </label>
-        {imagePath && (
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => {
-              setImagePath("");
-              setUpload(null);
-            }}
-          >
-            기존 이미지 제거
-          </button>
-        )}
         <Footer
           disabled={!lines.length || saving}
           label={
@@ -480,10 +446,17 @@ export function ProductForm({
           <input
             name="active"
             type="checkbox"
+            aria-describedby="active-menu-help"
             defaultChecked={product?.active ?? true}
           />{" "}
           생산 메뉴로 사용
         </label>
+        <p id="active-menu-help" className="field-help">
+          체크하면 새 주문에서 선택할 수 있고 생산 계산·추가 생산 추천에
+          사용됩니다. 해제하면 새 주문의 메뉴 선택과 추가 생산 추천에서
+          제외됩니다. 기존 주문·생산 기록은 유지되며, 이미 예약된 주문의
+          생산량·재료 계산은 계속됩니다.
+        </p>
       </div>
       <fieldset className="product-photo-picker">
         <legend className="field-label">메뉴 썸네일</legend>

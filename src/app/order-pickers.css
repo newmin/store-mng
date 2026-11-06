@@ -733,3 +733,29 @@
     font-size: 13px;
   }
 }
+
+.time-format-options {
+  display: flex;
+  padding: 4px;
+  gap: 4px;
+  border-radius: 10px;
+  background: #f3f4ef;
+}
+.time-format-options button {
+  flex: 1;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+.time-format-options button[aria-pressed="true"] {
+  background: #fff;
+  border-color: #b5c5a9;
+  color: #345932;
+  font-weight: 600;
+}
+.time-dialog .wheel-column {
+  flex: 1;
+  max-width: 112px;
+}

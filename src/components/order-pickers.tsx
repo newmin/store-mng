@@ -22,6 +22,12 @@ import {
   ShoppingBag,
   X,
 } from "lucide-react";
+import {
+  displayTime,
+  hour24,
+  TIME_FORMAT_KEY,
+  type TimeFormat,
+} from "@/lib/order-input";
 import type { Product } from "@/lib/types";
 import { findMenuPhoto, menuBoard, menuCategories } from "@/lib/menu-catalog";
 
@@ -169,6 +175,18 @@ export function TimePicker({
   onChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [format, setFormat] = useState<TimeFormat>("24");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(TIME_FORMAT_KEY) === "12") setFormat("12");
+    } catch {}
+  }, []);
+  function changeFormat(next: TimeFormat) {
+    setFormat(next);
+    try {
+      localStorage.setItem(TIME_FORMAT_KEY, next);
+    } catch {}
+  }
   return (
     <div className="time-picker-field">
       <span className="field-label">수령 시간</span>
@@ -178,15 +196,17 @@ export function TimePicker({
         className="time-picker-trigger"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
-        aria-label={`수령 시간 ${value}, 시간 선택`}
+        aria-label={`수령 시간 ${displayTime(value, format)}, 시간 선택`}
       >
         <Clock3 size={18} />
-        <b>{value}</b>
+        <b>{displayTime(value, format)}</b>
         <span>시간 선택</span>
         <ChevronDown size={16} />
       </button>
       {open && (
         <TimeDialog
+          format={format}
+          onFormatChange={changeFormat}
           value={value}
           onClose={() => setOpen(false)}
           onDone={(v) => {
@@ -199,6 +219,8 @@ export function TimePicker({
   );
 }
 function TimeDialog({
+  format,
+  onFormatChange,
   value,
   onClose,
   onDone,
@@ -206,6 +228,8 @@ function TimeDialog({
   value: string;
   onClose: () => void;
   onDone: (v: string) => void;
+  format: TimeFormat;
+  onFormatChange: (v: TimeFormat) => void;
 }) {
   const [hour, setHour] = useState(value.split(":")[0]);
   const [minute, setMinute] = useState(value.split(":")[1]);
@@ -219,9 +243,64 @@ function TimeDialog({
       className="time-dialog"
       onClose={onClose}
     >
-      <p className="picker-description">24시간 기준 · 10분 단위</p>
+      <div
+        className="time-format-options"
+        role="group"
+        aria-label="시간 표시 방식"
+      >
+        <button
+          type="button"
+          aria-pressed={format === "24"}
+          onClick={() => onFormatChange("24")}
+        >
+          24시간
+        </button>
+        <button
+          type="button"
+          aria-pressed={format === "12"}
+          onClick={() => onFormatChange("12")}
+        >
+          오전/오후
+        </button>
+      </div>
+      <p className="picker-description">
+        선택한 표시 방식은 이 브라우저의 기본값으로 저장돼요.
+      </p>
       <div className="wheel-pair">
-        <Wheel label="시" options={hours} value={hour} onChange={setHour} />
+        {format === "12" && (
+          <Wheel
+            key="period"
+            label="오전/오후"
+            options={["오전", "오후"]}
+            value={Number(hour) < 12 ? "오전" : "오후"}
+            onChange={(v) =>
+              setHour(hour24(String(Number(hour) % 12 || 12), v))
+            }
+          />
+        )}
+        <Wheel
+          key={format}
+          label="시"
+          options={
+            format === "24"
+              ? hours
+              : Array.from({ length: 12 }, (_, i) =>
+                  String(i + 1).padStart(2, "0"),
+                )
+          }
+          value={
+            format === "24"
+              ? hour
+              : String(Number(hour) % 12 || 12).padStart(2, "0")
+          }
+          onChange={(v) =>
+            setHour(
+              format === "24"
+                ? v
+                : hour24(v, Number(hour) < 12 ? "오전" : "오후"),
+            )
+          }
+        />
         <span className="wheel-colon" aria-hidden="true">
           :
         </span>
@@ -234,10 +313,7 @@ function TimeDialog({
       </div>
       <div className="time-picker-footer">
         <span>
-          선택한 시간{" "}
-          <b>
-            {hour}:{minute}
-          </b>
+          선택한 시간 <b>{displayTime(`${hour}:${minute}`, format)}</b>
         </span>
         <button
           type="button"

@@ -2282,3 +2282,78 @@ main {
     color: #000 !important;
   }
 }
+
+/* Completed pickups stay readable while clearly separated from waiting orders. */
+.order-card.picked {
+  background: #f0f0ed;
+  border-color: #d8d8d3;
+  border-left: 4px solid #9b9d96;
+}
+.order-card.picked .order-time strong,
+.order-card.picked .order-title h3,
+.order-card.picked .order-items,
+.order-card.picked .phone {
+  color: #73766f;
+}
+.order-card.picked .order-title h3 {
+  text-decoration: line-through;
+  text-decoration-color: #aaada5;
+}
+.order-card.picked .channel,
+.order-card.picked .sticker-note {
+  filter: grayscale(1);
+}
+.field-help {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.65;
+  margin: 7px 0 0;
+}
+.notice:popover-open {
+  position: fixed;
+  inset: max(16px, env(safe-area-inset-top)) auto auto 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 24px));
+  box-sizing: border-box;
+  border: 1px solid #dfc4a3;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fff8ed;
+  color: #794a23;
+  box-shadow: 0 8px 30px #352d2530;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.notice > svg {
+  flex-shrink: 0;
+}
+.notice > span {
+  flex: 1;
+}
+.notice .icon-button {
+  color: inherit;
+  flex-shrink: 0;
+}
+.notice-error:popover-open {
+  background: #fff2ef;
+  border-color: #e7bdb4;
+  color: #8b3c30;
+}
+.notice-success:popover-open {
+  background: #eef6ea;
+  border-color: #b6ccaa;
+  color: #345932;
+}
+@media print {
+  .notice:popover-open {
+    display: none;
+  }
+}

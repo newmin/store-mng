@@ -168,9 +168,6 @@ export function OrderForm({
               placeholder="010-0000-0000"
               maxLength={14}
             />
-            <small className="field-help">
-              숫자만 입력하면 -를 붙여 드려요. 연락처가 없으면 비워 두세요.
-            </small>
           </label>
           <label>
             수령 날짜{" "}

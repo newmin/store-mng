@@ -200,7 +200,6 @@ export function TimePicker({
       >
         <Clock3 size={18} />
         <b>{displayTime(value, format)}</b>
-        <span>시간 선택</span>
         <ChevronDown size={16} />
       </button>
       {open && (

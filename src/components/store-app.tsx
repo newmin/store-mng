@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   Box,
   CalendarDays,
-  Check,
   CheckCheck,
   ChevronLeft,
   ChevronRight,
@@ -196,11 +195,6 @@ export default function StoreApp() {
     return () => data?.subscription.unsubscribe();
   }, []);
   useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 4000);
-    return () => clearTimeout(t);
-  }, [toast]);
-  useEffect(() => {
     if (!sharedMode || !user || modal || busy) return;
     const handler = () => {
       if (document.visibilityState === "visible") void refresh();
@@ -341,21 +335,7 @@ export default function StoreApp() {
         <div className="order-content">
           <div className="order-title">
             <h3>{o.customer}</h3>
-            <Pill
-              tone={
-                o.status === "picked"
-                  ? "gray"
-                  : o.status === "cancelled"
-                    ? "gray"
-                    : "orange"
-              }
-            >
-              {o.status === "picked"
-                ? "수령 완료"
-                : o.status === "cancelled"
-                  ? "취소"
-                  : "수령 대기"}
-            </Pill>
+            {o.status === "cancelled" && <Pill tone="gray">취소</Pill>}
             <span className="channel">{o.channel}</span>
           </div>
           <p className="order-items">
@@ -386,41 +366,44 @@ export default function StoreApp() {
               참고 이미지 보기
             </button>
           )}
-          {o.pickedAt && (
-            <p className="muted small">
-              {o.pickedBy} ·{" "}
-              {new Intl.DateTimeFormat("ko-KR", {
-                timeZone: "Asia/Seoul",
-                hour: "2-digit",
-                minute: "2-digit",
-              }).format(new Date(o.pickedAt))}{" "}
-              수령 처리
-            </p>
-          )}
         </div>
         <div className="order-actions">
-          {o.status === "reserved" ? (
+          {o.status !== "cancelled" ? (
             <>
-              <button
-                className="button small secondary"
-                disabled={busy}
-                onClick={() =>
-                  void action({
-                    type: "orderStatus",
-                    id: o.id,
-                    status: "picked",
-                  })
-                }
-              >
-                <Check size={16} /> 수령
-              </button>
-              <button
-                className="text-button small"
-                onClick={() => open({ type: "order", order: o })}
-              >
-                수정
-              </button>
-              {!compact && (
+              <label className="pickup-check">
+                <input
+                  type="checkbox"
+                  checked={o.status === "picked"}
+                  aria-label={`${o.customer} 주문 수령 완료`}
+                  disabled={busy}
+                  onChange={(e) =>
+                    void action({
+                      type: "orderStatus",
+                      id: o.id,
+                      status: e.target.checked ? "picked" : "reserved",
+                    })
+                  }
+                />
+                <span>수령 완료</span>
+              </label>
+              {o.status === "picked" && o.pickedAt && (
+                <time className="pickup-time" dateTime={o.pickedAt}>
+                  {new Intl.DateTimeFormat("ko-KR", {
+                    timeZone: "Asia/Seoul",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }).format(new Date(o.pickedAt))}
+                </time>
+              )}
+              {o.status === "reserved" && (
+                <button
+                  className="text-button small"
+                  onClick={() => open({ type: "order", order: o })}
+                >
+                  수정
+                </button>
+              )}
+              {!compact && o.status === "reserved" && (
                 <button
                   className="text-button small danger-text"
                   disabled={busy}
@@ -1586,7 +1569,12 @@ export default function StoreApp() {
         </button>
       </nav>
       {toast && (
-        <Notice kind="success" message={toast} onDismiss={() => setToast("")} />
+        <Notice
+          kind="success"
+          message={toast}
+          autoDismissMs={4000}
+          onDismiss={() => setToast("")}
+        />
       )}
       {modal && (
         <ModalShell

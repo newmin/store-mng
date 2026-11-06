@@ -44,14 +44,9 @@
   letter-spacing: 0.5px;
   font-weight: 600;
 }
-.time-picker-trigger > span {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--muted);
-  margin-left: auto;
-}
 .time-picker-trigger > svg:last-child {
   color: #9caa94;
+  margin-left: auto;
 }
 .channel-picker,
 .order-kind-picker {
@@ -620,9 +615,6 @@
   }
   .time-picker-trigger > b {
     font-size: 17px;
-  }
-  .time-picker-trigger > span {
-    font-size: 9px;
   }
   .time-picker-trigger > svg {
     width: 15px;

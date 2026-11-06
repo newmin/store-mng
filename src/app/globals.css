@@ -805,6 +805,37 @@ main {
   gap: 3px;
   margin-left: auto;
 }
+.pickup-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid #d9e2d5;
+  border-radius: 6px;
+  background: #f8faf6;
+  color: #65775f;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pickup-check input {
+  flex: 0 0 auto;
+  margin: 0;
+}
+.pickup-check:has(input:focus-visible) {
+  outline: 3px solid #d2b779;
+  outline-offset: 2px;
+}
+.pickup-time {
+  color: #8f948b;
+  font-size: 9px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
 .order-actions .button {
   min-height: 32px;
   border-radius: 5px;
@@ -2303,6 +2334,11 @@ main {
 .order-card.picked .sticker-note {
   filter: grayscale(1);
 }
+.order-card.picked .pickup-check {
+  border-color: #c9cec5;
+  background: #e5e7e2;
+  color: #676d65;
+}
 .field-help {
   display: block;
   color: var(--muted);
@@ -2312,9 +2348,11 @@ main {
   margin: 7px 0 0;
 }
 .notice:popover-open {
+  --notice-x: 0px;
   position: fixed;
   inset: max(16px, env(safe-area-inset-top)) auto auto 50%;
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% + var(--notice-x)));
+  opacity: 1;
   margin: 0;
   width: max-content;
   max-width: min(560px, calc(100vw - 24px));
@@ -2331,6 +2369,31 @@ main {
   font-size: 13px;
   line-height: 1.6;
   overflow-wrap: anywhere;
+  touch-action: pan-y;
+  user-select: none;
+  cursor: grab;
+  will-change: transform, opacity;
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease-out;
+  animation: notice-enter 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.notice.is-dragging {
+  cursor: grabbing;
+  transition: none;
+}
+.notice.is-leaving {
+  pointer-events: none;
+}
+@keyframes notice-enter {
+  from {
+    transform: translateX(-50%) translateY(-12px) scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(calc(-50% + var(--notice-x))) translateY(0) scale(1);
+    opacity: 1;
+  }
 }
 .notice > svg {
   flex-shrink: 0;
@@ -2355,5 +2418,11 @@ main {
 @media print {
   .notice:popover-open {
     display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notice:popover-open {
+    animation-duration: 0.01ms;
+    transition-duration: 0.01ms;
   }
 }

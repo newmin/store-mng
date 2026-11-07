@@ -332,6 +332,16 @@ export default function StoreApp() {
               ? "오늘"
               : o.date.slice(5).replace("-", " / ")}
           </span>
+          {o.status === "reserved" && (
+            <button
+              className="icon-button order-edit"
+              aria-label={`${o.customer} 주문 수정`}
+              title="주문 수정"
+              onClick={() => open({ type: "order", order: o })}
+            >
+              <Pencil size={18} />
+            </button>
+          )}
         </div>
         <div className="order-content">
           <div className="order-title">
@@ -340,14 +350,19 @@ export default function StoreApp() {
             <span className="channel">{o.channel}</span>
           </div>
           <p className="order-items">
-            {o.kind === "gift" && <b>선물세트 {o.boxes}상자 · </b>}
+            {o.kind === "gift" && (
+              <>
+                <b>선물세트 {o.boxes}상자</b>
+                {" ("}
+              </>
+            )}
             {o.lines
               .map(
                 (l) =>
                   `${productName(l.productId)} ${l.quantity}${l.unit === "box" ? "박스" : "개"}`,
               )
               .join(" · ")}
-            {o.kind === "gift" && <span className="muted"> (상자당)</span>}
+            {o.kind === "gift" && ")"}
           </p>
           {o.sticker && (
             <p className="sticker-note">
@@ -394,16 +409,6 @@ export default function StoreApp() {
                     minute: "2-digit",
                   }).format(new Date(o.pickedAt))}
                 </time>
-              )}
-              {o.status === "reserved" && (
-                <button
-                  className="icon-button order-edit"
-                  aria-label={`${o.customer} 주문 수정`}
-                  title="주문 수정"
-                  onClick={() => open({ type: "order", order: o })}
-                >
-                  <Pencil size={18} />
-                </button>
               )}
             </>
           ) : (

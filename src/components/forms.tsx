@@ -194,7 +194,7 @@ export function OrderForm({
                   min={1}
                   max={1000000}
                   value={boxes || ""}
-                  placeholder="예: 3"
+                  placeholder="0"
                   onChange={(e) => setBoxes(Number(e.target.value))}
                   required
                 />{" "}

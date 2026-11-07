@@ -709,6 +709,8 @@ main {
   border-bottom: 0;
 }
 .order-time {
+  min-height: 88px;
+  flex-shrink: 0;
   min-width: 46px;
   display: flex;
   flex-direction: column;
@@ -802,7 +804,7 @@ main {
   position: relative;
   flex-shrink: 0;
   width: 60px;
-  min-height: 116px;
+  min-height: 72px;
   display: flex;
   align-items: center;
   flex-direction: column;
@@ -836,10 +838,8 @@ main {
   margin: 0;
   cursor: pointer;
 }
-.order-actions .order-edit {
-  position: absolute;
-  right: 0;
-  bottom: 0;
+.order-time .order-edit {
+  margin-top: 8px;
   width: 40px;
   height: 40px;
   color: var(--muted);

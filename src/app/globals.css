@@ -799,6 +799,10 @@ main {
   margin-top: 6px;
 }
 .order-actions {
+  position: relative;
+  flex-shrink: 0;
+  width: 60px;
+  min-height: 116px;
   display: flex;
   align-items: center;
   flex-direction: column;
@@ -811,7 +815,10 @@ main {
   align-items: center;
   gap: 6px;
   margin: 0;
-  padding: 5px 8px;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  padding: 10px;
   border: 1px solid #d9e2d5;
   border-radius: 6px;
   background: #f8faf6;
@@ -823,8 +830,24 @@ main {
   cursor: pointer;
 }
 .pickup-check input {
+  width: 28px;
+  height: 28px;
   flex: 0 0 auto;
   margin: 0;
+  cursor: pointer;
+}
+.order-actions .order-edit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 40px;
+  height: 40px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.order-cancel {
+  margin-top: 22px;
 }
 .pickup-check:has(input:focus-visible) {
   outline: 3px solid #d2b779;

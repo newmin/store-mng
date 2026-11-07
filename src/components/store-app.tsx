@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   LogOut,
   Package,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -384,7 +385,6 @@ export default function StoreApp() {
                     })
                   }
                 />
-                <span>수령 완료</span>
               </label>
               {o.status === "picked" && o.pickedAt && (
                 <time className="pickup-time" dateTime={o.pickedAt}>
@@ -397,26 +397,12 @@ export default function StoreApp() {
               )}
               {o.status === "reserved" && (
                 <button
-                  className="text-button small"
+                  className="icon-button order-edit"
+                  aria-label={`${o.customer} 주문 수정`}
+                  title="주문 수정"
                   onClick={() => open({ type: "order", order: o })}
                 >
-                  수정
-                </button>
-              )}
-              {!compact && o.status === "reserved" && (
-                <button
-                  className="text-button small danger-text"
-                  disabled={busy}
-                  onClick={() => {
-                    if (confirm(`${o.customer}님의 주문을 취소할까요?`))
-                      void action({
-                        type: "orderStatus",
-                        id: o.id,
-                        status: "cancelled",
-                      });
-                  }}
-                >
-                  주문 취소
+                  <Pencil size={18} />
                 </button>
               )}
             </>
@@ -1606,12 +1592,33 @@ export default function StoreApp() {
         >
           {error && <Notice message={error} onDismiss={() => setError("")} />}
           {modal.type === "order" && (
-            <OrderForm
-              state={state}
-              order={modal.order}
-              date={date}
-              save={save}
-            />
+            <>
+              <OrderForm
+                state={state}
+                order={modal.order}
+                date={date}
+                save={save}
+              />
+              {modal.order?.status === "reserved" && (
+                <button
+                  type="button"
+                  className="text-button danger-text order-cancel"
+                  disabled={busy}
+                  onClick={() => {
+                    if (
+                      confirm(`${modal.order!.customer}님의 주문을 취소할까요?`)
+                    )
+                      void save({
+                        type: "orderStatus",
+                        id: modal.order!.id,
+                        status: "cancelled",
+                      });
+                  }}
+                >
+                  주문 취소
+                </button>
+              )}
+            </>
           )}
           {modal.type === "product" && (
             <ProductForm state={state} product={modal.product} save={save} />

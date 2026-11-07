@@ -183,25 +183,21 @@ export function OrderForm({
         <ChannelPicker value={channel} onChange={setChannel} />
         <OrderKindPicker value={kind} onChange={setKind} />
         {kind === "gift" && (
-          <div className="callout">
-            <Info size={17} />
-            <div>
-              <label className="inline-label">
-                선물상자 수{" "}
-                <input
-                  aria-label="선물상자 수"
-                  type="number"
-                  min={1}
-                  max={1000000}
-                  value={boxes || ""}
-                  placeholder="0"
-                  onChange={(e) => setBoxes(Number(e.target.value))}
-                  required
-                />{" "}
-                상자
-              </label>
-            </div>
-          </div>
+          <label className="gift-box-count">
+            <Info size={17} aria-hidden="true" />
+            선물상자 수{" "}
+            <input
+              aria-label="선물상자 수"
+              type="number"
+              min={1}
+              max={1000000}
+              value={boxes || ""}
+              placeholder="0"
+              onChange={(e) => setBoxes(Number(e.target.value))}
+              required
+            />{" "}
+            상자
+          </label>
         )}
         <div className="section-label">
           {kind === "gift" ? "상자당 구성" : "주문 메뉴"}{" "}

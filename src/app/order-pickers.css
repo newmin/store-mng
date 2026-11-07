@@ -63,8 +63,8 @@
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 7px;
-  padding: 12px 2px 10px;
+  gap: 5px;
+  padding: 8px 2px;
   margin: 0;
   border: 1px solid transparent;
   background: #f6f7f3;
@@ -73,15 +73,15 @@
   font-weight: 500;
   color: #7c8877;
   cursor: pointer;
-  min-height: 87px;
+  min-height: 72px;
   transition:
     background 0.18s,
     border-color 0.18s,
     box-shadow 0.18s;
 }
 .channel-symbol {
-  width: 35px;
-  height: 35px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -97,6 +97,28 @@
 }
 .channel-symbol.kakao {
   color: #554626;
+}
+.gift-box-count {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  margin: 0 0 16px;
+  background: #f6f7f3;
+  border: 1px solid #e6ecdf;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.gift-box-count input {
+  width: 76px;
+  height: 36px;
+  min-height: 36px;
+  padding: 5px 10px;
+  font-size: 16px;
+}
+.gift-box-count > svg {
+  flex-shrink: 0;
+  color: var(--muted);
 }
 .channel-symbol.instagram {
   background: linear-gradient(135deg, #bb78bf, #dd8894 60%, #ecc47a);
@@ -585,13 +607,13 @@
     gap: 7px;
   }
   .channel-choice {
-    min-height: 79px;
-    padding: 10px 2px 8px;
+    min-height: 66px;
+    padding: 7px 2px;
     font-size: 10px;
   }
   .channel-symbol {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border-radius: 10px;
   }
   .channel-symbol svg {

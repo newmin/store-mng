@@ -23,7 +23,6 @@ import {
   Settings,
   ShoppingBag,
   Sparkles,
-  TriangleAlert,
   Undo2,
   Users,
   X,
@@ -44,6 +43,7 @@ import { BrandMark, BrandWelcome } from "./store-brand";
 import { menuCategories } from "@/lib/menu-catalog";
 import { RiceThumbnail } from "./order-pickers";
 import { OrderMessage } from "./order-message";
+import { ProductionWorkspace } from "./production-workspace";
 import { fulfillmentLabel } from "@/lib/order-message";
 import type { Command, Material, Order, Plan, Product, Lot } from "@/lib/types";
 import {
@@ -296,9 +296,6 @@ export default function StoreApp() {
   );
   const plan = state.plans.find(
     (p) => p.date === date && p.status !== "completed",
-  );
-  const completed = state.plans.filter(
-    (p) => p.date === date && p.status === "completed",
   );
   const reservedPieces = activeOrders.reduce(
     (s, o) => s + orderPieces(o).reduce((n, l) => n + l.pieces, 0),
@@ -910,171 +907,22 @@ export default function StoreApp() {
             </>
           )}
           {view === "production" && (
-            <>
-              <div className="section-intro">
-                <div>
-                  <h2>{koreanDate(date)} 생산계획</h2>
-                </div>
-                <div className="button-row">
-                  <button
-                    className="button secondary"
-                    disabled={thinking || busy || !state.settings.initialized}
-                    onClick={() => void recommend()}
-                  >
-                    <Sparkles size={17} />
-                    {thinking ? "추천안 검증 중…" : "오늘의 메뉴 추천"}
-                  </button>
-                  <button
-                    className="button primary"
-                    disabled={!state.products.length}
-                    onClick={() => open({ type: "plan", plan })}
-                  >
-                    <Plus size={17} />
-                    {plan ? "계획 수정" : "계획 직접 작성"}
-                  </button>
-                </div>
-              </div>
-              {!state.settings.initialized && (
-                <div className="callout">
-                  <InfoIcon />
-                  <span>
-                    AI 추천 전, 매장 설정에서 메뉴 선정 기준을 저장하세요.
-                  </span>
-                  <button
-                    className="text-button"
-                    onClick={() => open({ type: "settings" })}
-                  >
-                    설정하기
-                  </button>
-                </div>
-              )}
-              <section className="panel">
-                <div className="table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>메뉴</th>
-                        <th>예약</th>
-                        <th>가용 완제품</th>
-                        <th>진열 목표</th>
-                        <th>추가 생산</th>
-                        <th>생산 기준</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {req.map((r) => (
-                        <tr key={r.product.id}>
-                          <td>
-                            <span className="product-name">
-                              <i style={{ background: r.product.color }} />
-                              {r.product.name}
-                            </span>
-                          </td>
-                          <td>{number(r.reserved)}개</td>
-                          <td>{number(r.carry)}개</td>
-                          <td>{number(r.product.displayTarget)}개</td>
-                          <td>
-                            <b>
-                              {r.batches} × {r.product.batchLabel}
-                            </b>
-                            <small>
-                              {r.batches * (r.product.batchYield || 0)}개
-                            </small>
-                          </td>
-                          <td>
-                            {r.issue ? (
-                              <Pill tone="orange">{r.issue}</Pill>
-                            ) : (
-                              <span className="muted">
-                                {r.product.batchYield}개 /{" "}
-                                {r.product.batchLabel}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {!req.length && (
-                  <Empty>매장 설정에서 메뉴와 생산 기준을 등록해 주세요.</Empty>
-                )}
-              </section>
-              {plan && (
-                <section className="panel below">
-                  <div className="panel-heading">
-                    <h2>저장된 생산계획</h2>
-                    <Pill
-                      tone={
-                        plan.sourceRevision !== state.revision
-                          ? "orange"
-                          : plan.status === "confirmed"
-                            ? "green"
-                            : "gray"
-                      }
-                    >
-                      {plan.sourceRevision !== state.revision
-                        ? "재계산 필요"
-                        : plan.status === "confirmed"
-                          ? "확정"
-                          : "초안"}
-                    </Pill>
-                  </div>
-                  <div className="plan-content">
-                    {plan.lines.map((l) => (
-                      <div className="plan-line" key={l.productId}>
-                        <b>{productName(l.productId)}</b>
-                        <span>{l.batches} 생산 단위</span>
-                        {l.reason && <small>{l.reason}</small>}
-                      </div>
-                    ))}
-                    <div className="button-row">
-                      <button
-                        className="button secondary"
-                        onClick={() => open({ type: "plan", plan })}
-                      >
-                        수정 · 다시 확정
-                      </button>
-                      <button
-                        className="button primary"
-                        disabled={
-                          busy ||
-                          plan.status !== "confirmed" ||
-                          plan.sourceRevision !== state.revision ||
-                          date !== todayDate
-                        }
-                        onClick={() => open({ type: "complete", plan })}
-                      >
-                        <CheckCheck size={17} /> 생산 완료 기록
-                      </button>
-                    </div>
-                  </div>
-                </section>
-              )}
-              {completed.map((p) => (
-                <section className="panel below" key={p.id}>
-                  <div className="panel-heading">
-                    <h2>완료된 생산</h2>
-                    <Pill>재료 차감 완료</Pill>
-                  </div>
-                  <div className="plan-content">
-                    {p.lines.map((l) => (
-                      <div className="plan-line" key={l.productId}>
-                        <b>{productName(l.productId)}</b>
-                        <span>{l.actualPieces}개 생산</span>
-                      </div>
-                    ))}
-                    <p className="muted small">
-                      {p.completedBy} ·{" "}
-                      {p.completedAt &&
-                        new Date(p.completedAt).toLocaleString("ko-KR", {
-                          timeZone: "Asia/Seoul",
-                        })}
-                    </p>
-                  </div>
-                </section>
-              ))}
-            </>
+            <ProductionWorkspace
+              state={state}
+              date={date}
+              today={todayDate}
+              busy={busy}
+              thinking={thinking}
+              onEdit={() => open({ type: "plan", plan })}
+              onComplete={(plan) => open({ type: "complete", plan })}
+              onRecommend={() => void recommend()}
+              onProduct={(product) => open({ type: "product", product })}
+              onInventory={() => {
+                setInventoryKind("ingredient");
+                setView("inventory");
+              }}
+              onSettings={() => open({ type: "settings" })}
+            />
           )}
           {view === "inventory" && (
             <>
@@ -1764,9 +1612,6 @@ export default function StoreApp() {
       )}
     </div>
   );
-}
-function InfoIcon() {
-  return <TriangleAlert size={18} />;
 }
 function Login({
   error,

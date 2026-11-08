@@ -140,6 +140,33 @@
   font-size: 13px;
   font-weight: 600;
 }
+.order-date-group > summary {
+  min-height: 48px;
+  cursor: pointer;
+  list-style: none;
+}
+.order-date-group > summary::-webkit-details-marker {
+  display: none;
+}
+.order-date-group > summary:hover {
+  background: #f4ead9;
+}
+.order-date-group > summary:focus-visible {
+  outline: 3px solid #d2b779;
+  outline-offset: -3px;
+}
+.order-date-count {
+  margin-left: auto;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.order-date-chevron {
+  flex-shrink: 0;
+  transform: rotate(-90deg);
+}
+.order-date-group[open] .order-date-chevron {
+  transform: rotate(0deg);
+}
 .pill.orange {
   background: #f9efde;
   color: #ae8652;

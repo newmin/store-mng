@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDownLeft,
   ArrowRight,
@@ -41,6 +41,8 @@ import { brand } from "@/lib/brand";
 import { Notice } from "./notice";
 import { BrandMark, BrandWelcome } from "./store-brand";
 import { OrderMessage } from "./order-message";
+import { OrderList } from "./order-list";
+import { BackToTop } from "./back-to-top";
 import { MenuManager } from "./menu-manager";
 import type { ProductSection } from "./product-form";
 import { ProductionWorkspace } from "./production-workspace";
@@ -448,26 +450,6 @@ export default function StoreApp() {
       </article>
     );
   }
-  function OrderList({
-    items,
-    compact = false,
-  }: {
-    items: Order[];
-    compact?: boolean;
-  }) {
-    return items.map((order, index) => (
-      <Fragment key={order.id}>
-        {date !== end &&
-          (index === 0 || items[index - 1].date !== order.date) && (
-            <h3 className="order-date-heading">
-              <CalendarDays size={15} aria-hidden="true" />
-              <time dateTime={order.date}>{koreanDate(order.date)}</time>
-            </h3>
-          )}
-        <OrderCard order={order} compact={compact} />
-      </Fragment>
-    ));
-  }
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -770,7 +752,13 @@ export default function StoreApp() {
                     <span>수령 시간순</span>
                   </div>
                   {activeOrders.length ? (
-                    <OrderList items={activeOrders.slice(0, 4)} compact />
+                    <OrderList
+                      items={activeOrders.slice(0, 4)}
+                      groupDates={date !== end}
+                      renderOrder={(order) => (
+                        <OrderCard key={order.id} order={order} compact />
+                      )}
+                    />
                   ) : (
                     <Empty action={newOrderButton}>예약 없음</Empty>
                   )}
@@ -883,7 +871,14 @@ export default function StoreApp() {
                   </span>
                 </div>
                 {filtered.length ? (
-                  <OrderList items={filtered} />
+                  <OrderList
+                    key={`${date}:${end}:${query}:${statusFilter}`}
+                    items={filtered}
+                    collapsible
+                    renderOrder={(order) => (
+                      <OrderCard key={order.id} order={order} />
+                    )}
+                  />
                 ) : (
                   <Empty action={newOrderButton}>
                     조회 조건에 맞는 주문이 없어요.
@@ -1356,9 +1351,6 @@ export default function StoreApp() {
             </>
           )}
         </main>
-        <footer className="page-footer">
-          <span>말랑콩떡 · 함께 쓰는 매장 노트</span>
-        </footer>
       </div>
       <nav className="mobile-nav">
         {navigation
@@ -1391,6 +1383,7 @@ export default function StoreApp() {
           <span>설정</span>
         </button>
       </nav>
+      <BackToTop hidden={!!modal} />
       {toast && (
         <Notice
           kind="success"

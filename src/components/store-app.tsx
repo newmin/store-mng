@@ -1454,6 +1454,7 @@ export default function StoreApp() {
                   <div className="settings-content">
                     <PaymentAccountForm
                       account={state.paymentAccount}
+                      bank={state.paymentBank}
                       save={save}
                       busy={busy}
                     />
@@ -1640,6 +1641,7 @@ export default function StoreApp() {
                     order={order}
                     products={state.products}
                     paymentAccount={state.paymentAccount}
+                    paymentBank={state.paymentBank}
                   />
                 )
               );

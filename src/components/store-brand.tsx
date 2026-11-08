@@ -16,7 +16,7 @@ export function BrandMark() {
 
 export function BrandWelcome() {
   return (
-    <section className="brand-welcome" aria-label="말랑콩떡 매장 소개">
+    <section className="brand-welcome" aria-label="말랑콩떡 바로가기">
       <div className="brand-welcome-art">
         <img
           src={brand.logo}
@@ -26,7 +26,7 @@ export function BrandWelcome() {
         />
       </div>
       <div className="brand-welcome-copy">
-        <h2>말랑콩떡 매장 노트</h2>
+        <h2>말랑콩떡 바로가기</h2>
         <nav className="inquiry-shortcuts" aria-label="문의 바로가기">
           <a
             href="https://www.instagram.com/direct/inbox/"
@@ -51,9 +51,6 @@ export function BrandWelcome() {
             <MessageCircle size={16} aria-hidden="true" /> 카톡
           </a>
         </nav>
-        <p className="inquiry-shortcuts-note">
-          문자 앱에서 작성 화면이 열리면 대화 목록으로 이동해 주세요.
-        </p>
       </div>
     </section>
   );

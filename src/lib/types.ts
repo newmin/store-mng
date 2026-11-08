@@ -128,6 +128,7 @@ export type Audit = { at: string; actor: string; message: string };
 export type StoreState = {
   demoSeededMonths?: string[];
   paymentAccount?: string;
+  paymentBank?: string;
   catalogVersion?: number;
   revision: number;
   products: Product[];
@@ -160,6 +161,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("savePaymentAccount"),
     account: z.string().trim().max(200),
+    bank: z.string().trim().max(50).optional(),
   }),
   z.object({
     type: z.literal("savePlan"),

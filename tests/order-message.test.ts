@@ -157,4 +157,33 @@ describe("fulfillment and confirmation messages", () => {
         .paymentAccount,
     ).toBe("");
   });
+
+  it("saves the bank separately and includes it in the confirmation message", () => {
+    const state = demoState("2026-11-12");
+    const saved = applyCommand(
+      state,
+      {
+        type: "savePaymentAccount",
+        bank: " 테스트은행 ",
+        account: " 123-456 예금주 ",
+      },
+      "테스트",
+    );
+    expect(saved.paymentBank).toBe("테스트은행");
+    expect(saved.paymentAccount).toBe("123-456 예금주");
+    expect(
+      orderMessage(
+        saved.orders[0],
+        saved.products,
+        saved.paymentAccount,
+        saved.paymentBank,
+      ),
+    ).toContain("입금 계좌는 테스트은행 123-456 예금주입니다.");
+    const legacyUpdate = applyCommand(
+      saved,
+      { type: "savePaymentAccount", account: "789 예금주" },
+      "테스트",
+    );
+    expect(legacyUpdate.paymentBank).toBe("테스트은행");
+  });
 });

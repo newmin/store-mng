@@ -267,12 +267,6 @@
   outline: 2px solid #895f36;
   outline-offset: 3px;
 }
-.brand-welcome-copy > .inquiry-shortcuts-note {
-  margin: 8px 14px 0 0;
-  color: #846d50;
-  font-size: 11px;
-  line-height: 1.6;
-}
 .brand-welcome-photos {
   display: flex;
   gap: 7px;

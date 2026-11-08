@@ -408,6 +408,7 @@ export function applyCommand(
     }
     case "savePaymentAccount": {
       s.paymentAccount = c.account;
+      s.paymentBank = c.bank ?? s.paymentBank;
       message = "예약확인문자 입금 계좌 저장";
       break;
     }

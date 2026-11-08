@@ -996,29 +996,45 @@ export function CloseForm({
 }
 export function PaymentAccountForm({
   account,
+  bank,
   save,
   busy,
 }: {
   account?: string;
+  bank?: string;
   save: Save;
   busy: boolean;
 }) {
   const [value, setValue] = useState(account || "");
+  const [bankName, setBankName] = useState(bank || "");
   return (
     <form
       onSubmit={async (e) => {
         e.preventDefault();
-        await save({ type: "savePaymentAccount", account: value });
+        await save({
+          type: "savePaymentAccount",
+          account: value,
+          bank: bankName,
+        });
       }}
     >
       <fieldset disabled={busy}>
+        <label>
+          은행명
+          <input
+            value={bankName}
+            onChange={(e) => setBankName(e.target.value)}
+            maxLength={50}
+            required={!!value.trim()}
+          />
+        </label>
         <label>
           입금 계좌
           <input
             value={value}
             onChange={(e) => setValue(e.target.value)}
             maxLength={200}
-            placeholder="은행명 · 계좌번호 · 예금주"
+            placeholder="계좌번호 · 예금주"
           />
         </label>
         <p className="field-help">저장한 계좌는 예약확인문자에 포함됩니다.</p>

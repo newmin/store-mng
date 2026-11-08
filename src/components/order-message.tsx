@@ -8,13 +8,15 @@ export function OrderMessage({
   order,
   products,
   paymentAccount,
+  paymentBank,
 }: {
   order: Order;
   products: Product[];
   paymentAccount?: string;
+  paymentBank?: string;
 }) {
   const [body, setBody] = useState(() =>
-    orderMessage(order, products, paymentAccount),
+    orderMessage(order, products, paymentAccount, paymentBank),
   );
   const [feedback, setFeedback] = useState("");
   const text = useRef<HTMLTextAreaElement>(null);
@@ -56,10 +58,6 @@ export function OrderMessage({
           }}
         />
       </label>
-      <p className="field-help">
-        문자 앱에서 내용을 확인하고 전송해 주세요. 본문이 채워지지 않으면 문구를
-        복사해 붙여넣으세요.
-      </p>
       <div className="form-footer button-row">
         <button
           type="button"

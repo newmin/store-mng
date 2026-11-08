@@ -128,6 +128,18 @@
 .order-time strong {
   color: #96734a;
 }
+.order-date-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 22px;
+  background: #faf4e8;
+  border-top: 1px solid #ede2cf;
+  border-bottom: 1px solid #ede2cf;
+  color: #86633a;
+  font-size: 13px;
+  font-weight: 600;
+}
 .pill.orange {
   background: #f9efde;
   color: #ae8652;

@@ -407,10 +407,16 @@ export function OrderKindPicker({
   );
 }
 
-export function RiceThumbnail({ product }: { product: Product }) {
+export function RiceThumbnail({
+  product,
+  photoZoom = 1,
+}: {
+  product: Product;
+  photoZoom?: number;
+}) {
   const photo = findMenuPhoto(product.image);
   const round = /꿀떡|경단|송편/.test(product.name);
-  if (photo) return <CatalogThumbnail image={product.image} />;
+  if (photo) return <CatalogThumbnail image={product.image} zoom={photoZoom} />;
   return (
     <span
       className={`menu-thumbnail ${round ? "round-rice" : ""}`}
@@ -427,10 +433,20 @@ export function RiceThumbnail({ product }: { product: Product }) {
     </span>
   );
 }
-export function CatalogThumbnail({ image }: { image?: string }) {
+export function CatalogThumbnail({
+  image,
+  zoom = 1,
+}: {
+  image?: string;
+  zoom?: number;
+}) {
   const photo = findMenuPhoto(image);
   if (!photo) return null;
-  const [x, y, width, height] = photo.rect;
+  const [left, top, originalWidth, originalHeight] = photo.rect;
+  const width = originalWidth / zoom;
+  const height = originalHeight / zoom;
+  const x = left + (originalWidth - width) / 2;
+  const y = top + (originalHeight - height) / 2;
   return (
     <span
       className="menu-thumbnail has-photo catalog-thumbnail"

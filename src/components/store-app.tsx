@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDownLeft,
   ArrowRight,
@@ -40,9 +40,9 @@ import { authFetch, sharedMode, supabase } from "@/lib/client";
 import { brand } from "@/lib/brand";
 import { Notice } from "./notice";
 import { BrandMark, BrandWelcome } from "./store-brand";
-import { menuCategories } from "@/lib/menu-catalog";
-import { RiceThumbnail } from "./order-pickers";
 import { OrderMessage } from "./order-message";
+import { MenuManager } from "./menu-manager";
+import type { ProductSection } from "./product-form";
 import { ProductionWorkspace } from "./production-workspace";
 import { fulfillmentLabel } from "@/lib/order-message";
 import type { Command, Material, Order, Plan, Product, Lot } from "@/lib/types";
@@ -63,7 +63,7 @@ type View =
 type Modal =
   | { type: "order"; order?: Order }
   | { type: "message"; orderId: string }
-  | { type: "product"; product?: Product }
+  | { type: "product"; product?: Product; section?: ProductSection }
   | { type: "material"; material?: Material; kind: "ingredient" | "supply" }
   | { type: "stock"; material: Material }
   | { type: "plan"; plan?: Plan; initial?: Plan["lines"] }
@@ -240,7 +240,7 @@ export default function StoreApp() {
     try {
       if (!sharedMode)
         throw new Error(
-          "체험 모드에서는 AI에 연결하지 않습니다. 생산계획 직접 작성은 사용할 수 있어요.",
+          "추가 메뉴 추천을 사용하려면 매장 데이터와 AI 연결이 필요해요.",
         );
       const result = await authFetch("/api/recommend", {
         method: "POST",
@@ -447,6 +447,26 @@ export default function StoreApp() {
       </article>
     );
   }
+  function OrderList({
+    items,
+    compact = false,
+  }: {
+    items: Order[];
+    compact?: boolean;
+  }) {
+    return items.map((order, index) => (
+      <Fragment key={order.id}>
+        {date !== end &&
+          (index === 0 || items[index - 1].date !== order.date) && (
+            <h3 className="order-date-heading">
+              <CalendarDays size={15} aria-hidden="true" />
+              <time dateTime={order.date}>{koreanDate(order.date)}</time>
+            </h3>
+          )}
+        <OrderCard order={order} compact={compact} />
+      </Fragment>
+    ));
+  }
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -484,13 +504,13 @@ export default function StoreApp() {
             </button>
           ))}
         </nav>
-        <div className="sidebar-account">
-          <span className="avatar">{sharedMode ? "매" : "체"}</span>
-          <div>
-            <b>{sharedMode ? "함께 운영 중" : "체험 매장"}</b>
-            <small>{sharedMode ? user : "이 기기에만 저장됩니다"}</small>
-          </div>
-          {sharedMode && (
+        {sharedMode && (
+          <div className="sidebar-account">
+            <span className="avatar">매</span>
+            <div>
+              <b>함께 운영 중</b>
+              <small>{user}</small>
+            </div>
             <button
               className="icon-button"
               aria-label="로그아웃"
@@ -498,8 +518,8 @@ export default function StoreApp() {
             >
               <LogOut size={17} />
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </aside>
       <div className="main-shell">
         <header className="topbar">
@@ -507,22 +527,22 @@ export default function StoreApp() {
             말랑콩떡 <span>/</span> <b>{title}</b>
           </div>
           <div className="topbar-right">
-            <span className="sharing">
-              <Users size={15} />
-              {sharedMode ? "매장 공유 모드" : "체험 모드"}
-            </span>
-            <button
-              className="icon-button"
-              aria-label="매장 데이터 새로고침"
-              disabled={busy}
-              onClick={() => {
-                void refresh();
-                if (!sharedMode)
-                  setToast("체험 데이터는 이 기기에 저장됩니다.");
-              }}
-            >
-              <RefreshCw size={18} />
-            </button>
+            {sharedMode && (
+              <>
+                <span className="sharing">
+                  <Users size={15} />
+                  매장 공유 모드
+                </span>
+                <button
+                  className="icon-button"
+                  aria-label="매장 데이터 새로고침"
+                  disabled={busy}
+                  onClick={() => void refresh()}
+                >
+                  <RefreshCw size={18} />
+                </button>
+              </>
+            )}
             <span className="top-avatar">떡</span>
           </div>
         </header>
@@ -545,16 +565,6 @@ export default function StoreApp() {
               </button>
             ) : null}
           </div>
-          {!sharedMode && (
-            <div className="demo-banner">
-              <span>
-                <span className="live-dot" /> 체험 모드 · 이 브라우저에만 저장
-              </span>
-              <button onClick={() => setView("settings")}>
-                매장 연결 <ArrowRight size={13} />
-              </button>
-            </div>
-          )}
           {error && !modal && (
             <Notice message={error} onDismiss={() => setError("")} />
           )}
@@ -759,9 +769,7 @@ export default function StoreApp() {
                     <span>수령 시간순</span>
                   </div>
                   {activeOrders.length ? (
-                    activeOrders
-                      .slice(0, 4)
-                      .map((o) => <OrderCard key={o.id} order={o} compact />)
+                    <OrderList items={activeOrders.slice(0, 4)} compact />
                   ) : (
                     <Empty action={newOrderButton}>예약 없음</Empty>
                   )}
@@ -874,7 +882,7 @@ export default function StoreApp() {
                   </span>
                 </div>
                 {filtered.length ? (
-                  filtered.map((o) => <OrderCard key={o.id} order={o} />)
+                  <OrderList items={filtered} />
                 ) : (
                   <Empty action={newOrderButton}>
                     조회 조건에 맞는 주문이 없어요.
@@ -916,7 +924,9 @@ export default function StoreApp() {
               onEdit={() => open({ type: "plan", plan })}
               onComplete={(plan) => open({ type: "complete", plan })}
               onRecommend={() => void recommend()}
-              onProduct={(product) => open({ type: "product", product })}
+              onProduct={(product) =>
+                open({ type: "product", product, section: "production" })
+              }
               onInventory={() => {
                 setInventoryKind("ingredient");
                 setView("inventory");
@@ -1233,67 +1243,12 @@ export default function StoreApp() {
           )}
           {view === "settings" && (
             <>
-              <section className="panel">
-                <div className="panel-heading">
-                  <h2>메뉴와 생산 기준</h2>
-                </div>
-                <div className="product-grid">
-                  {state.products
-                    .filter((p) => !p.archived)
-                    .map((p) => (
-                      <button
-                        className="product-card"
-                        key={p.id}
-                        onClick={() => open({ type: "product", product: p })}
-                      >
-                        <RiceThumbnail product={p} />
-                        <h3>{p.name}</h3>
-                        {p.boxPrice && (
-                          <strong className="product-box-price">
-                            {p.boxPrice.toLocaleString("ko-KR")}원 / 박스
-                          </strong>
-                        )}
-                        {p.category && (
-                          <span className="product-category-label">
-                            {menuCategories[p.category]}
-                          </span>
-                        )}
-                        <p>
-                          {p.batchYield
-                            ? `${p.batchLabel} → ${p.batchYield}개`
-                            : "생산 기준 미등록"}
-                        </p>
-                        <div>
-                          <span>박스 {p.boxSize}개</span>
-                          <span>
-                            {p.shelfDays === 1
-                              ? "당일 판매"
-                              : `${p.shelfDays}일 판매`}
-                          </span>
-                        </div>
-                        <small>
-                          {recipeIssue(p, state) ||
-                            `진열 목표 ${p.displayTarget}개`}
-                          {!p.active && " · 비활성"}
-                        </small>
-                      </button>
-                    ))}
-                </div>
-                {!state.products.length && (
-                  <Empty
-                    action={
-                      <button
-                        className="button primary"
-                        onClick={() => open({ type: "product" })}
-                      >
-                        첫 메뉴 등록
-                      </button>
-                    }
-                  >
-                    재료를 등록한 뒤 메뉴별 생산 기준을 입력해 주세요.
-                  </Empty>
-                )}
-              </section>
+              <MenuManager
+                state={state}
+                onEdit={(product, section) =>
+                  open({ type: "product", product, section })
+                }
+              />
               <div className="settings-grid">
                 <section className="panel">
                   <div className="panel-heading">
@@ -1340,13 +1295,12 @@ export default function StoreApp() {
                 <section className="panel">
                   <div className="panel-heading">
                     <h2>
-                      <Users size={18} /> 매장 연결
+                      <Users size={18} /> 매장 관리
                     </h2>
                   </div>
                   <div className="settings-content">
-                    {sharedMode ? (
+                    {sharedMode && (
                       <>
-                        <Pill>실제 매장 공유 모드</Pill>
                         <p>{user}</p>
                         <button
                           className="button secondary"
@@ -1354,10 +1308,6 @@ export default function StoreApp() {
                         >
                           비밀번호 설정 · 변경
                         </button>
-                      </>
-                    ) : (
-                      <>
-                        <Pill tone="orange">체험 모드 · 공유되지 않음</Pill>
                       </>
                     )}
                     <button
@@ -1458,7 +1408,9 @@ export default function StoreApp() {
               : modal.type === "message"
                 ? "예약확인문자"
                 : modal.type === "product"
-                  ? "메뉴 · 생산 기준"
+                  ? modal.product
+                    ? `${modal.product.name} 수정`
+                    : "새 메뉴 등록"
                   : modal.type === "material"
                     ? "재고 품목 등록 · 수정"
                     : modal.type === "stock"
@@ -1524,7 +1476,13 @@ export default function StoreApp() {
             </>
           )}
           {modal.type === "product" && (
-            <ProductForm state={state} product={modal.product} save={save} />
+            <ProductForm
+              key={modal.product?.id || "new"}
+              state={state}
+              product={modal.product}
+              initialSection={modal.section}
+              save={save}
+            />
           )}
           {modal.type === "material" && (
             <MaterialForm

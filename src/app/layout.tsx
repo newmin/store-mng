@@ -4,6 +4,7 @@ import "./order-pickers.css";
 import "./brand.css";
 import "./menu-catalog.css";
 import "./production.css";
+import "./menu-manager.css";
 export const metadata: Metadata = {
   title: "말랑콩떡 — 매장 노트",
   description: "주문부터 생산, 재고와 마감까지. 함께 쓰는 떡집 매장 노트.",

@@ -2,6 +2,8 @@ import { z } from "zod";
 import { context, errorResponse, HttpError, readDocument } from "@/lib/server";
 import { commandSchema } from "@/lib/types";
 import { applyCommand } from "@/lib/state";
+import { findMenuPhoto } from "@/lib/menu-catalog";
+import { menuImageBelongsToShop } from "@/lib/menu-image";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
@@ -47,6 +49,16 @@ export async function POST(req: Request) {
       body.command,
       ctx.user.email || ctx.user.id,
     );
+    const productImage =
+      body.command.type === "saveProduct"
+        ? body.command.product.image
+        : undefined;
+    if (
+      productImage &&
+      !findMenuPhoto(productImage) &&
+      !menuImageBelongsToShop(productImage, ctx.shopId)
+    )
+      throw new HttpError("해당 매장의 메뉴 사진이 아닙니다.", 403);
     if (
       body.command.type === "saveOrder" &&
       body.command.order.imagePath &&

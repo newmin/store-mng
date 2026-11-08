@@ -193,19 +193,54 @@
 .product-use-field {
   margin-bottom: 4px;
 }
-.product-editor-photo {
+.product-photo-upload {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 18px;
   padding: 18px 0;
+}
+.product-photo-preview {
+  width: 104px;
+  height: 104px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #f5f0e6;
+}
+.product-photo-preview .menu-thumbnail,
+.product-photo-preview > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.product-photo-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
   color: #a18b6b;
   font-size: 12px;
 }
-.product-editor-photo .menu-thumbnail {
-  width: 64px;
-  height: 64px;
-  border-radius: 10px;
-  flex-shrink: 0;
+.product-photo-actions {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+.product-photo-select {
+  position: relative;
+  flex-direction: row;
+  margin: 0;
+  overflow: hidden;
+  cursor: pointer;
+}
+.product-photo-select input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.product-photo-select:focus-within {
+  outline: 3px solid #d2b779;
+  outline-offset: 3px;
 }
 .product-appearance {
   margin-top: 4px;
@@ -218,11 +253,6 @@
 }
 .product-appearance > label {
   margin-top: 12px;
-}
-.product-editor .product-photo-options {
-  max-height: 250px;
-  overflow-y: auto;
-  padding: 4px;
 }
 .recipe-copy {
   padding: 12px 14px;

@@ -1,17 +1,15 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { Copy, Plus, Trash2, Upload } from "lucide-react";
 import { uid } from "@/lib/dates";
 import { recipeIssue } from "@/lib/calculations";
-import {
-  menuCatalog,
-  menuCategories,
-  menuPhotoKey,
-  findMenuPhoto,
-} from "@/lib/menu-catalog";
+import { menuCategories } from "@/lib/menu-catalog";
+import { isUploadedMenuImage } from "@/lib/menu-image";
+import { uploadMenuImage, validateMenuImage } from "@/lib/menu-image-client";
+import { UploadedMenuThumbnail } from "./uploaded-menu-thumbnail";
 import type { Command, Product, StoreState } from "@/lib/types";
-import { CatalogThumbnail, RiceThumbnail } from "./order-pickers";
+import { RiceThumbnail } from "./order-pickers";
 import { Notice } from "./notice";
 
 export type ProductSection = "basic" | "sales" | "production";
@@ -25,11 +23,13 @@ export function ProductForm({
   state,
   product,
   initialSection = "basic",
+  onSavingChange,
   save,
 }: {
   state: StoreState;
   product?: Product;
   initialSection?: ProductSection;
+  onSavingChange: (saving: boolean) => void;
   save: (command: Command) => Promise<void>;
 }) {
   const formId = useId();
@@ -38,6 +38,15 @@ export function ProductForm({
   const [recipe, setRecipe] = useState(product?.recipe || []);
   const [photo, setPhoto] = useState<Product["image"] | "">(
     product?.image || "",
+  );
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState("");
+  const saveLock = useRef(false);
+  useEffect(
+    () => () => {
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
+    },
+    [photoPreview],
   );
   const [batchLabel, setBatchLabel] = useState(product?.batchLabel || "1되");
   const [batchYield, setBatchYield] = useState<number | "">(
@@ -55,12 +64,22 @@ export function ProductForm({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saveLock.current) return;
     const fields = new FormData(event.currentTarget);
     const text = (name: string) => String(fields.get(name) || "");
     const number = (name: string) => Number(fields.get(name) || 0);
     setError("");
+    saveLock.current = true;
     setSaving(true);
+    onSavingChange(true);
     try {
+      let image = photo || undefined;
+      if (photoFile) {
+        image = await uploadMenuImage(photoFile);
+        setPhoto(image);
+        setPhotoFile(null);
+        setPhotoPreview("");
+      }
       await save({
         type: "saveProduct",
         product: {
@@ -68,7 +87,7 @@ export function ProductForm({
           id,
           name: text("name"),
           color: text("color"),
-          image: photo || undefined,
+          image,
           category: text("category") as NonNullable<Product["category"]>,
           boxPrice: number("boxPrice") || undefined,
           boxSize: number("boxSize"),
@@ -83,7 +102,9 @@ export function ProductForm({
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      saveLock.current = false;
       setSaving(false);
+      onSavingChange(false);
     }
   }
 
@@ -184,18 +205,60 @@ export function ProductForm({
             />
             메뉴 사용
           </label>
-          <div className="product-editor-photo">
-            {product ? (
-              <RiceThumbnail
-                product={{ ...product, image: photo || undefined }}
-              />
-            ) : photo ? (
-              <CatalogThumbnail image={photo} />
-            ) : null}
-            <span>{findMenuPhoto(photo)?.name || "기본 그림"}</span>
+          <div className="product-photo-upload">
+            <div className="product-photo-preview">
+              {photoPreview ? (
+                <img src={photoPreview} alt="선택한 메뉴 사진 미리보기" />
+              ) : photo && isUploadedMenuImage(photo) ? (
+                <UploadedMenuThumbnail path={photo} />
+              ) : product ? (
+                <RiceThumbnail
+                  product={{ ...product, image: photo || undefined }}
+                />
+              ) : (
+                <span className="product-photo-empty">사진 없음</span>
+              )}
+            </div>
+            <div className="product-photo-actions">
+              <label className="button secondary product-photo-select">
+                <Upload size={16} />
+                {photo || photoFile ? "사진 변경" : "사진 올리기"}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  aria-label="메뉴 사진 올리기"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (!file) return;
+                    try {
+                      validateMenuImage(file);
+                      setPhotoFile(file);
+                      setPhotoPreview(URL.createObjectURL(file));
+                      setError("");
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                />
+              </label>
+              {(photo || photoFile) && (
+                <button
+                  type="button"
+                  className="text-button danger-text"
+                  onClick={() => {
+                    setPhoto("");
+                    setPhotoFile(null);
+                    setPhotoPreview("");
+                  }}
+                >
+                  사진 삭제
+                </button>
+              )}
+            </div>
           </div>
           <details className="product-appearance">
-            <summary>사진·색상 변경</summary>
+            <summary>메뉴 색상 변경</summary>
             <label>
               메뉴 색상
               <input
@@ -204,37 +267,6 @@ export function ProductForm({
                 defaultValue={product?.color || "#bdc9ad"}
               />
             </label>
-            <fieldset className="product-photo-picker">
-              <legend className="field-label">메뉴 사진</legend>
-              <div className="product-photo-options">
-                <label className={!photo ? "selected" : ""}>
-                  <input
-                    className="visually-hidden"
-                    type="radio"
-                    name="menuPhoto"
-                    checked={!photo}
-                    onChange={() => setPhoto("")}
-                  />
-                  <span className="no-photo-choice">기본 그림</span>
-                </label>
-                {menuCatalog.map((p) => (
-                  <label
-                    key={p.id}
-                    className={photo === menuPhotoKey(p.id) ? "selected" : ""}
-                  >
-                    <input
-                      className="visually-hidden"
-                      type="radio"
-                      name="menuPhoto"
-                      checked={photo === menuPhotoKey(p.id)}
-                      onChange={() => setPhoto(menuPhotoKey(p.id))}
-                    />
-                    <CatalogThumbnail image={menuPhotoKey(p.id)} />
-                    <span>{p.name}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
           </details>
         </section>
         <section
@@ -473,7 +505,7 @@ export function ProductForm({
         </section>
         <div className="form-footer product-editor-footer">
           <button className="button primary" type="submit">
-            메뉴 저장
+            {saving ? "사진과 메뉴 저장 중…" : "메뉴 저장"}
           </button>
         </div>
       </fieldset>

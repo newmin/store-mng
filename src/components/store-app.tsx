@@ -185,6 +185,7 @@ export default function StoreApp() {
     [thinking, setThinking] = useState(false),
     [recovery, setRecovery] = useState(false);
   const todayDate = today();
+  const [productSaving, setProductSaving] = useState(false);
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [view]);
@@ -1427,7 +1428,7 @@ export default function StoreApp() {
                                 ? "스티커 참고 이미지"
                                 : "오늘의 메뉴 추천안"
           }
-          busy={busy}
+          busy={busy || productSaving}
           onClose={() => setModal(null)}
         >
           {error && <Notice message={error} onDismiss={() => setError("")} />}
@@ -1481,6 +1482,7 @@ export default function StoreApp() {
               state={state}
               product={modal.product}
               initialSection={modal.section}
+              onSavingChange={setProductSaving}
               save={save}
             />
           )}

@@ -27,6 +27,8 @@ import {
 } from "@/lib/order-input";
 import type { Order, Product } from "@/lib/types";
 import { findMenuPhoto, menuBoard, menuCategories } from "@/lib/menu-catalog";
+import { isUploadedMenuImage } from "@/lib/menu-image";
+import { UploadedMenuThumbnail } from "./uploaded-menu-thumbnail";
 
 function PickerDialog({
   title,
@@ -415,6 +417,8 @@ export function RiceThumbnail({
   photoZoom?: number;
 }) {
   const photo = findMenuPhoto(product.image);
+  if (product.image && isUploadedMenuImage(product.image))
+    return <UploadedMenuThumbnail path={product.image} />;
   const round = /꿀떡|경단|송편/.test(product.name);
   if (photo) return <CatalogThumbnail image={product.image} zoom={photoZoom} />;
   return (

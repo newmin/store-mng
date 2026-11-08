@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { findMenuPhoto } from "./menu-catalog";
+import { isUploadedMenuImage } from "./menu-image";
 
 export const daySchema = z
   .string()
@@ -28,7 +29,11 @@ export const productSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   image: z
     .string()
-    .refine((v) => !!findMenuPhoto(v), "메뉴판에서 등록한 사진을 선택하세요.")
+    .max(200)
+    .refine(
+      (v) => !!findMenuPhoto(v) || isUploadedMenuImage(v),
+      "올바른 메뉴 사진을 선택해 주세요.",
+    )
     .optional(),
   category: z.enum(["general", "seolgi", "oven"]).optional(),
   boxPrice: z.number().int().positive().max(100000000).optional(),

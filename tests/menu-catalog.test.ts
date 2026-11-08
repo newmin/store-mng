@@ -94,7 +94,7 @@ describe("첨부 메뉴판 등록", () => {
       expect(productSchema.safeParse(p).success).toBe(true);
     }
   });
-  it("이전 인스타그램 사진 연결은 제거하고 새 메뉴판 사진만 허용한다", () => {
+  it("초기 메뉴판 사진을 유지하고 이전 인스타그램 사진 경로는 거절한다", () => {
     const state = demoState();
     state.products[4].image = "/brand/photos/gift-boxes.jpg";
     const after = upgradeMenuCatalog(state);

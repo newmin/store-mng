@@ -1,6 +1,8 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { Notice } from "./notice";
+import { OrderVoiceInput } from "./order-voice-input";
+import type { VoiceOrderDraft } from "@/lib/order-voice";
 import { formatPhone, validPhone } from "@/lib/order-input";
 import { Plus, Trash2, Info } from "lucide-react";
 import {
@@ -59,11 +61,40 @@ export function OrderForm({
     order?.deliveryAddress || "",
   );
   const [phone, setPhone] = useState(order?.phone || "");
+  const [customer, setCustomer] = useState(order?.customer || "");
+  const [pickupDate, setPickupDate] = useState(order?.date || date);
+  const [sticker, setSticker] = useState(order?.sticker || "");
   const [time, setTime] = useState(order?.time || "10:00");
   const [menuPicker, setMenuPicker] = useState<number | "add" | null>(null);
   const [boxes, setBoxes] = useState(order?.boxes || 0);
   const [saving, setSaving] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
   const [formError, setFormError] = useState("");
+  const voiceDraft: VoiceOrderDraft = {
+    customer,
+    phone,
+    date: pickupDate,
+    time,
+    fulfillment: fulfillment ?? null,
+    deliveryAddress,
+    kind,
+    boxes,
+    lines,
+    sticker,
+  };
+  function applyVoiceDraft(draft: VoiceOrderDraft) {
+    setCustomer(draft.customer);
+    setPhone(draft.phone);
+    setPickupDate(draft.date);
+    setTime(draft.time);
+    setFulfillment(draft.fulfillment ?? undefined);
+    setDeliveryAddress(draft.deliveryAddress);
+    setKind(draft.kind);
+    setBoxes(draft.boxes);
+    setLines(draft.lines);
+    setSticker(draft.sticker);
+    setFormError("");
+  }
   const change = (i: number, patch: Partial<OrderLine>) =>
     setLines(lines.map((l, j) => (i === j ? { ...l, ...patch } : l)));
   function selectProduct(p: Product) {
@@ -87,6 +118,7 @@ export function OrderForm({
   }
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (voiceBusy || saving) return;
     setFormError("");
     if (!fulfillment) {
       setFormError("수령 방식을 선택해 주세요.");
@@ -145,7 +177,14 @@ export function OrderForm({
         );
       }}
     >
-      <fieldset disabled={saving}>
+      <OrderVoiceInput
+        draft={voiceDraft}
+        products={state.products}
+        disabled={saving}
+        onDraft={applyVoiceDraft}
+        onBusyChange={setVoiceBusy}
+      />
+      <fieldset disabled={saving || voiceBusy}>
         {formError && (
           <Notice message={formError} onDismiss={() => setFormError("")} />
         )}
@@ -154,7 +193,8 @@ export function OrderForm({
             고객명{" "}
             <input
               name="customer"
-              defaultValue={order?.customer}
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
               required
               placeholder="예약자 성함"
               maxLength={80}
@@ -178,7 +218,8 @@ export function OrderForm({
             <input
               name="date"
               type="date"
-              defaultValue={order?.date || date}
+              value={pickupDate}
+              onChange={(e) => setPickupDate(e.target.value)}
               required
             />
           </label>
@@ -307,7 +348,8 @@ export function OrderForm({
           스티커 참고 문구{" "}
           <textarea
             name="sticker"
-            defaultValue={order?.sticker}
+            value={sticker}
+            onChange={(e) => setSticker(e.target.value)}
             placeholder="스티커에 들어갈 문구나 참고사항을 적어 주세요."
             maxLength={2000}
           />

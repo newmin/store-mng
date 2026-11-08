@@ -9,8 +9,10 @@ import {
   voiceOrderTool,
 } from "@/lib/order-voice";
 import type { RealtimeSessionCreateRequest } from "openai/resources/realtime/realtime";
+import { createVoiceRequestLimit } from "@/lib/voice-request-limit";
 
 export const maxDuration = 30;
+const allowVoiceRequest = createVoiceRequestLimit();
 const requestSchema = z.object({
   sdp: z
     .string()
@@ -27,14 +29,17 @@ export async function POST(req: Request) {
     // Next dev may construct req.url with its bind address (0.0.0.0).
     // The browser's Host header identifies the origin it actually opened.
     const requestHost = req.headers.get("host") || url.host;
-    const hostname = new URL(`http://${requestHost}`).hostname;
     const origin = req.headers.get("origin");
-    if (origin && new URL(origin).host !== requestHost)
+    if (!origin || new URL(origin).host !== requestHost)
       throw new HttpError("매장 화면에서 음성 입력을 시작해 주세요.", 403);
     if (!req.headers.get("content-type")?.includes("application/json"))
       throw new HttpError("음성 입력 요청 형식을 확인해 주세요.", 415);
 
     let products;
+    let client =
+      req.headers.get("x-real-ip") ||
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "local";
     const shared = !!(
       process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -42,14 +47,7 @@ export async function POST(req: Request) {
     if (shared) {
       const ctx = await context(req);
       products = voiceMenus((await readDocument(ctx)).document.products);
-    } else if (
-      process.env.NODE_ENV !== "development" ||
-      !["localhost", "127.0.0.1", "[::1]"].includes(hostname)
-    ) {
-      throw new HttpError(
-        "음성 주문 입력은 로그인한 매장에서 사용할 수 있어요.",
-        401,
-      );
+      client = ctx.user.id;
     }
     if (!process.env.OPENAI_API_KEY)
       throw new HttpError(
@@ -64,6 +62,11 @@ export async function POST(req: Request) {
       throw new HttpError("주문 초안이나 마이크 연결 정보를 확인해 주세요.");
     const input = parsed.data;
     products ??= input.products;
+    if (!allowVoiceRequest(client))
+      throw new HttpError(
+        "음성 입력을 너무 자주 시작했어요. 잠시 후 다시 시도해 주세요.",
+        429,
+      );
     const session: RealtimeSessionCreateRequest = {
       type: "realtime",
       model: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2.1",

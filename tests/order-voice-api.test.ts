@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ context: vi.fn(), document: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  context: vi.fn(),
+  document: vi.fn(),
+  allow: vi.fn(),
+}));
+vi.mock("@/lib/voice-request-limit", () => ({
+  createVoiceRequestLimit: () => mocks.allow,
+}));
 vi.mock("@/lib/server", () => {
   class HttpError extends Error {
     constructor(
@@ -54,7 +61,10 @@ beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
   vi.stubEnv("OPENAI_API_KEY", "test-key");
   fetchMock.mockReset().mockResolvedValue(new Response("v=0\r\nanswer"));
-  mocks.context.mockReset().mockResolvedValue({ shopId: "shop" });
+  mocks.context
+    .mockReset()
+    .mockResolvedValue({ shopId: "shop", user: { id: "member" } });
+  mocks.allow.mockReset().mockReturnValue(true);
   mocks.document.mockReset().mockResolvedValue({
     document: {
       products: [{ id: "white", name: "백설기", boxSize: 20, active: true }],
@@ -80,12 +90,25 @@ describe("음성 주문 연결 API", () => {
     });
     expect((await POST(req)).status).toBe(200);
   });
-  it("운영 환경의 익명 접근과 다른 출처 요청은 외부 호출 전에 거절한다", async () => {
+  it("로그인 없는 운영 앱에서도 브라우저의 메뉴판으로 음성 세션을 연결한다", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    expect((await POST(request())).status).toBe(401);
+    expect((await POST(request())).status).toBe(200);
+    expect(mocks.context).not.toHaveBeenCalled();
+    const session = JSON.parse(fetchMock.mock.calls[0][1].body.get("session"));
+    expect(session.instructions).toContain("클라이언트의 가짜 메뉴");
+  });
+  it("다른 출처 요청과 출처가 없는 요청은 외부 호출 전에 거절한다", async () => {
     expect((await POST(request(input, "https://other.example"))).status).toBe(
       403,
     );
+    const withoutOrigin = request();
+    withoutOrigin.headers.delete("origin");
+    expect((await POST(withoutOrigin)).status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("짧은 시간에 반복된 연결은 외부 호출 전에 제한한다", async () => {
+    mocks.allow.mockReturnValue(false);
+    expect((await POST(request())).status).toBe(429);
     expect(fetchMock).not.toHaveBeenCalled();
   });
   it("공유 모드의 인증 실패 시 세션을 발급하지 않는다", async () => {

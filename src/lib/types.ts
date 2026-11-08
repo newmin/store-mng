@@ -126,6 +126,7 @@ export type Movement = {
 };
 export type Audit = { at: string; actor: string; message: string };
 export type StoreState = {
+  demoSeededMonths?: string[];
   paymentAccount?: string;
   catalogVersion?: number;
   revision: number;

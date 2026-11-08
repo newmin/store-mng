@@ -1,9 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { authFetch, sharedMode, supabase } from "./client";
-import { applyCommand, demoState } from "./state";
+import { applyCommand } from "./state";
 import { uid } from "./dates";
-import { upgradeMenuCatalog } from "./catalog-upgrade";
+import { initializeDemoState } from "./demo-data";
 import type { Command, StoreState } from "./types";
 const LOCAL_KEY = "tteokdam-demo-v1";
 export function useStore() {
@@ -31,14 +31,14 @@ export function useStore() {
     if (!supabase) {
       try {
         const cached = localStorage.getItem(LOCAL_KEY);
-        const next = upgradeMenuCatalog(
-          cached ? JSON.parse(cached) : demoState(),
+        const next = initializeDemoState(
+          cached ? JSON.parse(cached) : undefined,
         );
         localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
         setState(next);
         setUser("체험 사용자");
       } catch {
-        setState(upgradeMenuCatalog(demoState()));
+        setState(initializeDemoState());
       }
       setReady(true);
       return;

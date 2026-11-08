@@ -240,6 +240,39 @@
   color: #a08054;
   font-size: 10px;
 }
+.inquiry-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 14px 0 0;
+}
+.inquiry-shortcuts a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #e9dcc3;
+  border-radius: 9px;
+  background: #fffdf7;
+  color: #825b32;
+  font-size: 12px;
+  text-decoration: none;
+}
+.inquiry-shortcuts a:hover {
+  background: #f3e7d3;
+}
+.inquiry-shortcuts a:focus-visible {
+  outline: 2px solid #895f36;
+  outline-offset: 3px;
+}
+.brand-welcome-copy > .inquiry-shortcuts-note {
+  margin: 8px 14px 0 0;
+  color: #846d50;
+  font-size: 11px;
+  line-height: 1.6;
+}
 .brand-welcome-photos {
   display: flex;
   gap: 7px;
@@ -576,6 +609,17 @@
   }
   .brand-welcome-copy > a {
     font-size: 9px;
+  }
+  .inquiry-shortcuts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-right: 0;
+  }
+  .inquiry-shortcuts a {
+    padding: 8px 6px;
+    font-size: 11px;
+    gap: 4px;
   }
   .brand-welcome-photos {
     display: none;

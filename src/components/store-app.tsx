@@ -43,12 +43,15 @@ import { Notice } from "./notice";
 import { BrandMark, BrandWelcome } from "./store-brand";
 import { menuCategories } from "@/lib/menu-catalog";
 import { RiceThumbnail } from "./order-pickers";
+import { OrderMessage } from "./order-message";
+import { fulfillmentLabel } from "@/lib/order-message";
 import type { Command, Material, Order, Plan, Product, Lot } from "@/lib/types";
 import {
   CloseForm,
   CompleteForm,
   MaterialForm,
   OrderForm,
+  PaymentAccountForm,
   PlanForm,
   ProductForm,
   SettingsForm,
@@ -59,6 +62,7 @@ type View =
   "home" | "orders" | "production" | "inventory" | "closing" | "settings";
 type Modal =
   | { type: "order"; order?: Order }
+  | { type: "message"; orderId: string }
   | { type: "product"; product?: Product }
   | { type: "material"; material?: Material; kind: "ingredient" | "supply" }
   | { type: "stock"; material: Material }
@@ -214,7 +218,11 @@ export default function StoreApp() {
   async function save(c: Command) {
     try {
       await run(c);
-      setModal(null);
+      setModal(
+        c.type === "saveOrder" && modal?.type === "order" && !modal.order
+          ? { type: "message", orderId: c.order.id }
+          : null,
+      );
       setToast("저장했습니다.");
     } catch {
       /* keep form and draft visible; the store exposes the error */
@@ -347,7 +355,7 @@ export default function StoreApp() {
           <div className="order-title">
             <h3>{o.customer}</h3>
             {o.status === "cancelled" && <Pill tone="gray">취소</Pill>}
-            <span className="channel">{o.channel}</span>
+            <span className="channel">{fulfillmentLabel(o.fulfillment)}</span>
           </div>
           <p className="order-items">
             {o.kind === "gift" && (
@@ -373,6 +381,18 @@ export default function StoreApp() {
             <a className="phone" href={`tel:${o.phone}`}>
               {o.phone}
             </a>
+          )}
+          {o.fulfillment !== "pickup" && o.deliveryAddress && (
+            <p className="order-delivery-address">{o.deliveryAddress}</p>
+          )}
+          {o.status !== "cancelled" && (
+            <button
+              type="button"
+              className="text-button small"
+              onClick={() => open({ type: "message", orderId: o.id })}
+            >
+              예약확인문자
+            </button>
           )}
           {o.imagePath && (
             <button
@@ -1429,6 +1449,18 @@ export default function StoreApp() {
               <div className="settings-grid">
                 <section className="panel">
                   <div className="panel-heading">
+                    <h2>예약확인문자</h2>
+                  </div>
+                  <div className="settings-content">
+                    <PaymentAccountForm
+                      account={state.paymentAccount}
+                      save={save}
+                      busy={busy}
+                    />
+                  </div>
+                </section>
+                <section className="panel">
+                  <div className="panel-heading">
                     <h2>
                       <Sparkles size={18} /> 오늘의 메뉴 추천 기준
                     </h2>
@@ -1574,28 +1606,44 @@ export default function StoreApp() {
               ? modal.order
                 ? "예약 주문 수정"
                 : "새로운 예약 주문"
-              : modal.type === "product"
-                ? "메뉴 · 생산 기준"
-                : modal.type === "material"
-                  ? "재고 품목 등록 · 수정"
-                  : modal.type === "stock"
-                    ? `${modal.material.name} 입출고`
-                    : modal.type === "plan"
-                      ? "생산계획 작성"
-                      : modal.type === "complete"
-                        ? "실제 생산 완료"
-                        : modal.type === "close"
-                          ? "마감 수량 기록"
-                          : modal.type === "settings"
-                            ? "오늘의 메뉴 추천 기준"
-                            : modal.type === "image"
-                              ? "스티커 참고 이미지"
-                              : "오늘의 메뉴 추천안"
+              : modal.type === "message"
+                ? "예약확인문자"
+                : modal.type === "product"
+                  ? "메뉴 · 생산 기준"
+                  : modal.type === "material"
+                    ? "재고 품목 등록 · 수정"
+                    : modal.type === "stock"
+                      ? `${modal.material.name} 입출고`
+                      : modal.type === "plan"
+                        ? "생산계획 작성"
+                        : modal.type === "complete"
+                          ? "실제 생산 완료"
+                          : modal.type === "close"
+                            ? "마감 수량 기록"
+                            : modal.type === "settings"
+                              ? "오늘의 메뉴 추천 기준"
+                              : modal.type === "image"
+                                ? "스티커 참고 이미지"
+                                : "오늘의 메뉴 추천안"
           }
           busy={busy}
           onClose={() => setModal(null)}
         >
           {error && <Notice message={error} onDismiss={() => setError("")} />}
+          {modal.type === "message" &&
+            (() => {
+              const order = state.orders.find((o) => o.id === modal.orderId);
+              return (
+                order && (
+                  <OrderMessage
+                    key={order.id}
+                    order={order}
+                    products={state.products}
+                    paymentAccount={state.paymentAccount}
+                  />
+                )
+              );
+            })()}
           {modal.type === "order" && (
             <>
               <OrderForm

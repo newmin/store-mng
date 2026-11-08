@@ -12,12 +12,9 @@ import {
   Check,
   ChevronDown,
   Clock3,
-  Instagram,
-  MessageCircle,
-  MessageSquare,
-  MoreHorizontal,
   Package,
-  Phone,
+  Bike,
+  Truck,
   Search,
   ShoppingBag,
   X,
@@ -28,7 +25,7 @@ import {
   TIME_FORMAT_KEY,
   type TimeFormat,
 } from "@/lib/order-input";
-import type { Product } from "@/lib/types";
+import type { Order, Product } from "@/lib/types";
 import { findMenuPhoto, menuBoard, menuCategories } from "@/lib/menu-catalog";
 
 function PickerDialog({
@@ -326,55 +323,42 @@ function TimeDialog({
   );
 }
 
-const channels = [
-  { name: "카카오톡", icon: MessageCircle, color: "#f4d73f", key: "kakao" },
-  { name: "전화", icon: Phone, color: "#86a48c", key: "phone" },
-  { name: "문자", icon: MessageSquare, color: "#88a4c9", key: "sms" },
-  { name: "네이버 톡톡", icon: MessageCircle, color: "#42bb75", key: "naver" },
-  { name: "인스타그램", icon: Instagram, color: "#d982a1", key: "instagram" },
-  { name: "매장", icon: ShoppingBag, color: "#c6a87d", key: "shop" },
-  { name: "기타", icon: MoreHorizontal, color: "#a1aaa0", key: "other" },
-];
-export function ChannelPicker({
+const fulfillmentChoices = [
+  { value: "pickup", name: "픽업", icon: ShoppingBag, color: "#c6a87d" },
+  { value: "quick", name: "퀵", icon: Bike, color: "#86a48c" },
+  { value: "delivery", name: "배달", icon: Truck, color: "#88a4c9" },
+] as const;
+export function FulfillmentPicker({
   value,
   onChange,
 }: {
-  value: string;
-  onChange: (v: string) => void;
+  value: Order["fulfillment"];
+  onChange: (v: NonNullable<Order["fulfillment"]>) => void;
 }) {
-  const choices = channels.some((c) => c.name === value)
-    ? channels
-    : [
-        ...channels,
-        { name: value, icon: MoreHorizontal, color: "#a1aaa0", key: "custom" },
-      ];
   return (
     <fieldset className="channel-picker">
-      <legend className="field-label">주문 채널</legend>
-      <div className="channel-options">
-        {choices.map((c) => (
+      <legend className="field-label">수령 방식</legend>
+      <div className="channel-options fulfillment-options">
+        {fulfillmentChoices.map((c) => (
           <label
-            className={`channel-choice ${value === c.name ? "is-selected" : ""}`}
-            key={c.name}
+            className={`channel-choice ${value === c.value ? "is-selected" : ""}`}
+            key={c.value}
             style={{ "--channel-color": c.color } as React.CSSProperties}
           >
             <input
               className="visually-hidden"
               type="radio"
-              name="channel"
-              value={c.name}
-              checked={value === c.name}
-              onChange={() => onChange(c.name)}
+              name="fulfillment"
+              value={c.value}
+              checked={value === c.value}
+              required
+              onChange={() => onChange(c.value)}
             />
-            <span className={`channel-symbol ${c.key}`} aria-hidden="true">
-              {c.key === "naver" ? (
-                <b>N</b>
-              ) : (
-                <c.icon size={23} strokeWidth={1.8} />
-              )}
+            <span className="channel-symbol" aria-hidden="true">
+              <c.icon size={23} strokeWidth={1.8} />
             </span>
-            <span>{c.name === "네이버 톡톡" ? "네이버 톡톡" : c.name}</span>
-            {value === c.name && (
+            <span>{c.name}</span>
+            {value === c.value && (
               <Check className="channel-check" size={12} aria-hidden="true" />
             )}
           </label>

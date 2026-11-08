@@ -406,6 +406,11 @@ export function applyCommand(
       message = `${m.name} 재고 조정`;
       break;
     }
+    case "savePaymentAccount": {
+      s.paymentAccount = c.account;
+      message = "예약확인문자 입금 계좌 저장";
+      break;
+    }
     case "saveSettings": {
       for (const id of c.settings.excluded) findProduct(id);
       s.settings = c.settings;

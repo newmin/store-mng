@@ -4,7 +4,7 @@ import { Notice } from "./notice";
 import { formatPhone, validPhone } from "@/lib/order-input";
 import { Plus, Trash2, Info } from "lucide-react";
 import {
-  ChannelPicker,
+  FulfillmentPicker,
   MenuPicker,
   OrderKindPicker,
   RiceThumbnail,
@@ -60,7 +60,11 @@ export function OrderForm({
 }) {
   const [kind, setKind] = useState<Order["kind"]>(order?.kind || "single");
   const [lines, setLines] = useState<OrderLine[]>(order?.lines || []);
-  const [channel, setChannel] = useState(order?.channel || "카카오톡");
+  const [orderId] = useState(() => order?.id || uid());
+  const [fulfillment, setFulfillment] = useState(order?.fulfillment);
+  const [deliveryAddress, setDeliveryAddress] = useState(
+    order?.deliveryAddress || "",
+  );
   const [phone, setPhone] = useState(order?.phone || "");
   const [time, setTime] = useState(order?.time || "10:00");
   const [menuPicker, setMenuPicker] = useState<number | "add" | null>(null);
@@ -91,6 +95,10 @@ export function OrderForm({
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError("");
+    if (!fulfillment) {
+      setFormError("수령 방식을 선택해 주세요.");
+      return;
+    }
     if (!lines.length) {
       setFormError("주문할 떡을 먼저 담아 주세요.");
       return;
@@ -107,10 +115,13 @@ export function OrderForm({
       await save({
         type: "saveOrder",
         order: {
-          id: order?.id || uid(),
+          id: orderId,
           customer: field(f, "customer"),
           phone: field(f, "phone"),
-          channel: field(f, "channel"),
+          channel: order?.channel,
+          fulfillment,
+          deliveryAddress:
+            fulfillment === "pickup" ? "" : deliveryAddress.trim(),
           date: field(f, "date"),
           time: field(f, "time"),
           kind,
@@ -137,7 +148,7 @@ export function OrderForm({
       onInvalidCapture={(e) => {
         e.preventDefault();
         setFormError(
-          "필수 입력값을 확인해 주세요. 고객명·수령 날짜·수량을 올바르게 입력해야 합니다.",
+          "필수 입력값을 확인해 주세요. 고객명·수령 날짜·수령 방식·수량을 확인해 주세요.",
         );
       }}
     >
@@ -180,7 +191,19 @@ export function OrderForm({
           </label>
           <TimePicker value={time} onChange={setTime} />
         </div>
-        <ChannelPicker value={channel} onChange={setChannel} />
+        <FulfillmentPicker value={fulfillment} onChange={setFulfillment} />
+        {(fulfillment === "quick" || fulfillment === "delivery") && (
+          <label className="delivery-address">
+            배송지
+            <input
+              name="deliveryAddress"
+              value={deliveryAddress}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
+              maxLength={500}
+              autoComplete="street-address"
+            />
+          </label>
+        )}
         <OrderKindPicker value={kind} onChange={setKind} />
         {kind === "gift" && (
           <label className="gift-box-count">
@@ -971,6 +994,40 @@ export function CloseForm({
     </form>
   );
 }
+export function PaymentAccountForm({
+  account,
+  save,
+  busy,
+}: {
+  account?: string;
+  save: Save;
+  busy: boolean;
+}) {
+  const [value, setValue] = useState(account || "");
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        await save({ type: "savePaymentAccount", account: value });
+      }}
+    >
+      <fieldset disabled={busy}>
+        <label>
+          입금 계좌
+          <input
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            maxLength={200}
+            placeholder="은행명 · 계좌번호 · 예금주"
+          />
+        </label>
+        <p className="field-help">저장한 계좌는 예약확인문자에 포함됩니다.</p>
+        <Footer label="계좌 저장" />
+      </fieldset>
+    </form>
+  );
+}
+
 export function SettingsForm({
   state,
   save,

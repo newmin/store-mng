@@ -51,7 +51,9 @@ export const orderSchema = z.object({
   id,
   customer: z.string().trim().min(1).max(80),
   phone: z.string().max(50),
-  channel: z.string().min(1).max(50),
+  channel: z.string().min(1).max(50).optional(),
+  fulfillment: z.enum(["pickup", "quick", "delivery"]).optional(),
+  deliveryAddress: z.string().trim().max(500).optional(),
   date: daySchema,
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   kind: z.enum(["single", "gift"]),
@@ -124,6 +126,7 @@ export type Movement = {
 };
 export type Audit = { at: string; actor: string; message: string };
 export type StoreState = {
+  paymentAccount?: string;
   catalogVersion?: number;
   revision: number;
   products: Product[];
@@ -153,6 +156,10 @@ export const commandSchema = z.discriminatedUnion("type", [
     note: z.string().trim().min(1).max(300),
   }),
   z.object({ type: z.literal("saveSettings"), settings: settingsSchema }),
+  z.object({
+    type: z.literal("savePaymentAccount"),
+    account: z.string().trim().max(200),
+  }),
   z.object({
     type: z.literal("savePlan"),
     id,

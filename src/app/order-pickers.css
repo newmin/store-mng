@@ -57,6 +57,20 @@
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 7px;
 }
+.channel-options.fulfillment-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.delivery-address {
+  margin-bottom: 22px;
+}
+.order-message textarea {
+  min-height: 240px;
+  line-height: 1.7;
+}
+.message-recipient,
+.order-delivery-address {
+  overflow-wrap: anywhere;
+}
 .channel-choice {
   position: relative;
   display: flex;

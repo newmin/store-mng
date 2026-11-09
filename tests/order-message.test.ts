@@ -64,18 +64,17 @@ describe("fulfillment and confirmation messages", () => {
       },
     ];
     const message = orderMessage(order, state.products);
-    expect(message).toContain("11월 12일(목) 오전 10시에");
+    expect(message).toContain("11월12일 목요일 10시 퀵");
     expect(message).toContain(
       `${state.products[0].name} 2박스, ${state.products[1].name} 5개`,
     );
-    expect(message).toContain("퀵으로 준비해 드릴게요.");
-    expect(message).toContain("서울시 테스트 배송지 주소로 보내드릴게요.");
+    expect(message).toContain("배송지: 서울시 테스트 배송지");
     expect(
       orderMessage({ ...order, fulfillment: "pickup" }, state.products),
     ).not.toContain("주소");
     expect(
       orderMessage({ ...order, deliveryAddress: "" }, state.products),
-    ).toContain("받으실 주소를 답장으로 보내 주세요.");
+    ).not.toContain("주소");
   });
 
   it("distinguishes gift box totals from per-box composition", () => {
@@ -105,7 +104,7 @@ describe("fulfillment and confirmation messages", () => {
     expect(smsLink("", body)).toBe("");
   });
 
-  it("includes the saved account and asks for payer name and missing sticker text", () => {
+  it("includes the saved account and payer request without requesting missing sticker text", () => {
     const state = demoState("2026-11-12");
     const order = {
       ...state.orders[0],
@@ -117,11 +116,10 @@ describe("fulfillment and confirmation messages", () => {
       state.products,
       "테스트은행 123-456 예금주",
     );
-    expect(message).toContain("입금 계좌는 테스트은행 123-456 예금주입니다.");
-    expect(message).toContain("입금하신 후 입금자명을 답장으로 알려 주세요.");
-    expect(message).toContain(
-      "스티커가 필요하시면 넣으실 문구도 함께 보내 주세요.",
-    );
+    expect(message).toContain("테스트은행 123-456 예금주");
+    expect(message).toContain("입금주시면 입금자명 꼭 문자부탁드립니다");
+    expect(message).not.toContain("스티커");
+    expect(message).not.toContain(order.customer);
     expect(message).not.toContain("주소");
     expect(orderMessage(order, state.products)).not.toContain("입금 계좌는");
     expect(
@@ -129,9 +127,9 @@ describe("fulfillment and confirmation messages", () => {
         { ...order, sticker: "축하합니다", time: "13:25" },
         state.products,
       ),
-    ).toContain("스티커에는 “축하합니다” 문구를 넣어드릴게요.");
+    ).toContain("스티커: 축하합니다");
     expect(orderMessage({ ...order, time: "13:25" }, state.products)).toContain(
-      "오후 1시 25분에",
+      "오후 1시 25분",
     );
   });
 
@@ -178,12 +176,60 @@ describe("fulfillment and confirmation messages", () => {
         saved.paymentAccount,
         saved.paymentBank,
       ),
-    ).toContain("입금 계좌는 테스트은행 123-456 예금주입니다.");
+    ).toContain("테스트은행\n123-456 예금주");
     const legacyUpdate = applyCommand(
       saved,
       { type: "savePaymentAccount", account: "789 예금주" },
       "테스트",
     );
     expect(legacyUpdate.paymentBank).toBe("테스트은행");
+  });
+});
+
+describe("reservation SMS template", () => {
+  it("matches the agreed layout and payment notice", () => {
+    const state = demoState("2026-11-10");
+    const product = { ...state.products[0], name: "피자설기" };
+    const order = {
+      ...state.orders[0],
+      time: "10:00",
+      sticker: "",
+      fulfillment: "pickup" as const,
+      kind: "single" as const,
+      lines: [
+        {
+          productId: product.id,
+          quantity: 1,
+          unit: "box" as const,
+          piecesPerUnit: 24,
+        },
+      ],
+    };
+    expect(
+      orderMessage(
+        order,
+        [product],
+        state.paymentAccount,
+        state.paymentBank,
+        39000,
+      ),
+    ).toBe(
+      [
+        "안녕하세요 말랑콩떡입니다",
+        "11월10일 화요일 10시 픽업",
+        "피자설기 1박스",
+        "예약되었습니다",
+        "",
+        "농협 말랑콩떡",
+        "351 1361 5924 23",
+        "39,000원",
+        "입금부탁드립니다",
+        "",
+        "입금주시면 입금자명 꼭 문자부탁드립니다",
+        "1시간이내 미입금시 자동취소되는점",
+        "양해부탁드립니다",
+        "감사합니다☺️",
+      ].join("\n"),
+    );
   });
 });

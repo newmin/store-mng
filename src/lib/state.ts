@@ -24,6 +24,8 @@ export function emptyState(): StoreState {
 }
 export function demoState(date = today()): StoreState {
   const s = emptyState();
+  s.paymentBank = "농협 말랑콩떡";
+  s.paymentAccount = "351 1361 5924 23";
   s.settings.initialized = true;
   s.materials = [
     {

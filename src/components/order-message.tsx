@@ -19,6 +19,7 @@ export function OrderMessage({
     orderMessage(order, products, paymentAccount, paymentBank),
   );
   const [feedback, setFeedback] = useState("");
+  const [amount, setAmount] = useState("");
   const text = useRef<HTMLTextAreaElement>(null);
 
   async function copy() {
@@ -46,6 +47,27 @@ export function OrderMessage({
           받는 사람　{order.customer} · {order.phone}
         </p>
       )}
+      <label>
+        입금 금액
+        <input
+          type="number"
+          min={1}
+          step={1}
+          value={amount}
+          onChange={(e) => {
+            const value = e.target.value;
+            setAmount(value);
+            const price = Number(value);
+            setBody((current) =>
+              current.replace(
+                /(?:^\d[\d,]*원\n)?입금부탁드립니다/m,
+                `${Number.isFinite(price) && price > 0 ? `${price.toLocaleString("ko-KR")}원\n` : ""}입금부탁드립니다`,
+              ),
+            );
+            setFeedback("");
+          }}
+        />
+      </label>
       <label>
         문자 내용
         <textarea

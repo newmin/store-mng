@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDownLeft,
+  ArrowLeft,
   ArrowRight,
   ArrowUpRight,
   Box,
@@ -47,7 +48,7 @@ import { BackToTop } from "./back-to-top";
 import { MenuManager } from "./menu-manager";
 import type { ProductSection } from "./product-form";
 import { ProductionWorkspace } from "./production-workspace";
-import { StickerWorkspace } from "./sticker-workspace";
+import { StickerWorkspace, type StickerHeader } from "./sticker-workspace";
 import { fulfillmentLabel } from "@/lib/order-message";
 import type { Command, Material, Order, Plan, Product, Lot } from "@/lib/types";
 import {
@@ -198,6 +199,12 @@ export default function StoreApp() {
   const todayDate = today();
   const [productSaving, setProductSaving] = useState(false);
   const [stickerEditing, setStickerEditing] = useState(false);
+  const [stickerHeader, setStickerHeader] = useState<StickerHeader>({
+    title: "스티커",
+    back: null,
+    busy: false,
+  });
+  const [stickerOrderId, setStickerOrderId] = useState<string>();
   function setView(next: View) {
     if (
       next !== view &&
@@ -205,6 +212,7 @@ export default function StoreApp() {
       !confirm("저장하지 않은 스티커 편집을 닫을까요?")
     )
       return;
+    if (next !== "stickers") setStickerOrderId(undefined);
     changeView(next);
   }
   useEffect(() => {
@@ -327,7 +335,10 @@ export default function StoreApp() {
     (n, r) => n + r.batches * (r.product.batchYield || 0),
     0,
   );
-  const title = navigation.find((n) => n.id === view)!.label;
+  const title =
+    view === "stickers"
+      ? stickerHeader.title
+      : navigation.find((n) => n.id === view)!.label;
   const materialName = (id: string) =>
     state.materials.find((m) => m.id === id)?.name || "삭제된 품목";
   const productName = (id: string) =>
@@ -403,6 +414,18 @@ export default function StoreApp() {
           )}
           {o.fulfillment !== "pickup" && o.deliveryAddress && (
             <p className="order-delivery-address">{o.deliveryAddress}</p>
+          )}
+          {o.status !== "cancelled" && (
+            <button
+              type="button"
+              className="text-button small"
+              onClick={() => {
+                setStickerOrderId(o.id);
+                setView("stickers");
+              }}
+            >
+              <StickyNote size={14} /> 스티커 제작
+            </button>
           )}
           {o.status !== "cancelled" && (
             <button
@@ -550,7 +573,20 @@ export default function StoreApp() {
         </header>
         <main>
           <div className="page-heading">
-            <div>
+            <div
+              className={view === "stickers" ? "sticker-page-title" : undefined}
+            >
+              {view === "stickers" && stickerHeader.back && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={`${stickerHeader.title} 목록으로 돌아가기`}
+                  disabled={stickerHeader.busy}
+                  onClick={stickerHeader.back}
+                >
+                  <ArrowLeft size={22} />
+                </button>
+              )}
               <h1>
                 {title}
                 <span className="heading-dot">.</span>
@@ -1263,7 +1299,7 @@ export default function StoreApp() {
                 onClick={() => setView("stickers")}
               >
                 <StickyNote size={18} />
-                스티커 그림 관리 · 제작
+                스티커 제작 · 템플릿 관리
               </button>
               <MenuManager
                 state={state}
@@ -1378,9 +1414,12 @@ export default function StoreApp() {
           )}
           {view === "stickers" && (
             <StickerWorkspace
+              key={stickerOrderId || "stickers"}
+              initialOrderId={stickerOrderId}
               state={state}
               run={run}
               onEditing={setStickerEditing}
+              onHeaderChange={setStickerHeader}
             />
           )}
         </main>

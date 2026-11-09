@@ -15,6 +15,14 @@ beforeAll(async () => {
   await db.exec(
     readFileSync("supabase/migrations/202611050001_store.sql", "utf8"),
   );
+  // PGlite has no background scheduler. Exercise the exact job body below.
+  const retentionMigration = readFileSync(
+    "supabase/migrations/202611090001_sticker_retention.sql",
+    "utf8",
+  );
+  await db.exec(
+    retentionMigration.split("create extension if not exists pg_cron;")[0],
+  );
   await db.exec(
     `grant select on all tables in schema public to authenticated,anon; grant select,insert on storage.objects to authenticated; insert into auth.users values('${a}'),('${b}'),('${outsider}'); insert into public.shops(id,name,slug) values('${shop}','테스트 매장','test'); insert into public.shop_members(shop_id,user_id) values('${shop}','${a}'),('${shop}','${b}');`,
   );
@@ -35,6 +43,44 @@ async function asUser(id: string, sql: string) {
   }
 }
 describe("실제 PostgreSQL 권한 · 트랜잭션", () => {
+  it("만료 작업만 정리하고 이전 주문 작업의 보관 시작 시각을 고정한다", async () => {
+    await db.exec("begin");
+    try {
+      const recent = new Date().toISOString();
+      const designs = [
+        {
+          id: "original",
+          kind: "template",
+          updatedAt: "2020-01-01T00:00:00.000Z",
+        },
+        {
+          id: "expired",
+          kind: "order",
+          createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+          updatedAt: recent,
+          retentionDays: 1,
+        },
+        { id: "legacy", orderId: "old-order" },
+      ];
+      const orders = [{ id: "old-order", updatedAt: recent }];
+      await db.query("update shop_state set document=$1", [
+        { orders, stickerDesigns: designs },
+      ]);
+      await db.exec(
+        "select public.prune_expired_sticker_work(); select public.prune_expired_sticker_work();",
+      );
+      const result = await db.query<{ version: number; document: unknown }>(
+        "select version, document from shop_state",
+      );
+      expect(Number(result.rows[0].version)).toBe(1);
+      expect(result.rows[0].document).toEqual({
+        orders,
+        stickerDesigns: [designs[0], { ...designs[2], createdAt: recent }],
+      });
+    } finally {
+      await db.exec("rollback");
+    }
+  });
   it("두 멤버는 같은 매장 데이터를 읽을 수 있다", async () => {
     expect((await asUser(a, "select * from shop_state")).rows).toHaveLength(1);
     expect((await asUser(b, "select * from shop_state")).rows).toHaveLength(1);

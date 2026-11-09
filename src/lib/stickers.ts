@@ -3,6 +3,11 @@ import { isUploadedMenuImage } from "./menu-image";
 import type { StoreState } from "./types";
 
 const key = z.string().min(1).max(100);
+export const MAX_STICKER_DAYS = 30;
+const DAY_MS = 86_400_000;
+export function isStickerSampleImage(path: string) {
+  return path === "/stickers/flowers.png" || path === "/stickers/brush.png";
+}
 export function collectStickerTags(
   existing: string[],
   input: string,
@@ -46,11 +51,18 @@ const position = z
 export const stickerDesignSchema = z.object({
   id: key,
   name: z.string().trim().min(1).max(80),
+  tags: z.array(z.string().trim().min(1).max(24)).max(20).optional(),
   orderId: key.optional(),
   kind: z.enum(["template", "order"]).optional(),
   updatedAt: z.string().datetime().optional(),
+  createdAt: z.string().datetime({ offset: true }).optional(),
+  retentionDays: z.number().int().min(1).max(MAX_STICKER_DAYS).optional(),
   assetId: key.optional(),
-  image: z.string().max(200).refine(isUploadedMenuImage).optional(),
+  image: z
+    .string()
+    .max(200)
+    .refine((path) => isUploadedMenuImage(path) || isStickerSampleImage(path))
+    .optional(),
   text: z.string().max(2000),
   shape: z.enum(["wide", "square"]),
   imageBox: position,
@@ -69,17 +81,42 @@ export type StickerBox = StickerDesign["imageBox"];
 export function isOrderSticker(design: StickerDesign) {
   return design.kind === "order" || (!design.kind && !!design.orderId);
 }
+function stickerCreatedAt(design: StickerDesign, state: StoreState) {
+  return (
+    design.createdAt ||
+    design.updatedAt ||
+    state.orders.find((order) => order.id === design.orderId)?.updatedAt
+  );
+}
+export function stickerExpiresAt(design: StickerDesign, state: StoreState) {
+  const start = stickerCreatedAt(design, state);
+  return start
+    ? Date.parse(start) + (design.retentionDays ?? MAX_STICKER_DAYS) * DAY_MS
+    : 0;
+}
+export function orderFromTemplate(
+  template: StickerDesign,
+  id: string,
+): StickerDesign {
+  return {
+    ...structuredClone(template),
+    id,
+    kind: "order",
+    name: `${template.name.slice(0, 74)} · 주문`,
+    orderId: undefined,
+    updatedAt: undefined,
+    createdAt: undefined,
+    retentionDays: MAX_STICKER_DAYS,
+  };
+}
 export function expiredStickerIds(
   state: StoreState,
   now = new Date().toISOString(),
 ) {
-  const cutoff = Date.parse(now) - 30 * 24 * 60 * 60 * 1000;
   return (state.stickerDesigns || [])
     .filter((d) => {
-      if (!isOrderSticker(d)) return false;
-      const saved =
-        d.updatedAt || state.orders.find((o) => o.id === d.orderId)?.updatedAt;
-      return !!saved && Date.parse(saved) <= cutoff;
+      const expires = isOrderSticker(d) && stickerExpiresAt(d, state);
+      return expires && expires <= Date.parse(now);
     })
     .map((d) => d.id);
 }
@@ -88,12 +125,22 @@ export function pruneStickerWork(
   now = new Date().toISOString(),
 ): StoreState {
   const expired = new Set(expiredStickerIds(state, now));
-  return expired.size
-    ? {
-        ...state,
-        stickerDesigns: state.stickerDesigns!.filter((d) => !expired.has(d.id)),
-      }
-    : state;
+  const designs = state.stickerDesigns;
+  if (
+    !designs ||
+    (!expired.size && !designs.some((d) => isOrderSticker(d) && !d.createdAt))
+  )
+    return state;
+  return {
+    ...state,
+    stickerDesigns: designs
+      .filter((d) => !expired.has(d.id))
+      .map((d) =>
+        isOrderSticker(d) && !d.createdAt
+          ? { ...d, createdAt: stickerCreatedAt(d, state) || now }
+          : d,
+      ),
+  };
 }
 export const stickerFonts = {
   sans: '"Noto Sans KR", "Malgun Gothic", sans-serif',
@@ -179,6 +226,44 @@ export function newStickerDesign(id: string): StickerDesign {
     align: "center",
     color: "#293e35",
   };
+}
+
+export function newStickerTemplate(id: string): StickerDesign {
+  return {
+    ...newStickerDesign(id),
+    name: "새 템플릿",
+    kind: "template",
+    tags: [],
+    text: "함께해 주셔서\n감사합니다",
+    textBox: { x: 8, y: 12, width: 84, height: 76 },
+  };
+}
+const sampleTemplates: StickerDesign[] = [
+  {
+    ...newStickerTemplate("sample-flowers"),
+    name: "꽃 감사 인사",
+    tags: ["감사", "답례"],
+    image: "/stickers/flowers.png",
+    imageBox: { x: 3, y: 8, width: 36, height: 84 },
+    textBox: { x: 41, y: 12, width: 55, height: 76 },
+    fontSize: 48,
+  },
+  {
+    ...newStickerTemplate("sample-brush"),
+    name: "분홍 축하",
+    tags: ["축하", "생일"],
+    image: "/stickers/brush.png",
+    imageBox: { x: 5, y: 15, width: 90, height: 70 },
+    text: "소중한 날을\n축하합니다",
+    fontSize: 48,
+  },
+];
+export function stickerTemplates(state: StoreState) {
+  const saved = (state.stickerDesigns || []).filter((d) => !isOrderSticker(d));
+  return [
+    ...sampleTemplates.filter((d) => !saved.some((s) => s.id === d.id)),
+    ...saved,
+  ];
 }
 
 // Preview and PNG use the same renderer; no physical label dimensions are assumed.

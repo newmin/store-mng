@@ -4,7 +4,7 @@ import { authFetch, sharedMode, supabase } from "./client";
 import { applyCommand } from "./state";
 import { uid } from "./dates";
 import { initializeDemoState } from "./demo-data";
-import { expiredStickerIds, pruneStickerWork } from "./stickers";
+import { isOrderSticker, pruneStickerWork, stickerExpiresAt } from "./stickers";
 import type { Command, StoreState } from "./types";
 const LOCAL_KEY = "tteokdam-demo-v1";
 export function useStore() {
@@ -20,28 +20,7 @@ export function useStore() {
   const refresh = useCallback(async () => {
     if (!sharedMode) return;
     try {
-      let result = await authFetch("/api/store");
-      if (expiredStickerIds(result.document).length) {
-        try {
-          result = {
-            ...result,
-            ...(await authFetch("/api/store", {
-              method: "POST",
-              body: JSON.stringify({
-                version: result.version,
-                requestId: uid(),
-                command: { type: "cleanupStickerWork" },
-              }),
-            })),
-          };
-        } catch {
-          // A concurrent save may win the version check; keep the shop usable and retry on the next refresh.
-          result = await authFetch("/api/store");
-          setError(
-            "만료된 스티커 작업을 정리하지 못했습니다. 다음 새로고침에서 다시 시도합니다.",
-          );
-        }
-      }
+      const result = await authFetch("/api/store");
       setState(result.document);
       setVersion(result.version);
       setUser(result.user || "");
@@ -86,6 +65,40 @@ export function useStore() {
       data.subscription.unsubscribe();
     };
   }, [refresh]);
+  useEffect(() => {
+    if (!state) return;
+    const orders = state.stickerDesigns?.filter(isOrderSticker);
+    if (!orders?.length) return;
+    const deadline = Math.min(...orders.map((d) => stickerExpiresAt(d, state)));
+    let timer: ReturnType<typeof setTimeout>;
+    const expire = () => {
+      clearTimeout(timer);
+      const remaining = deadline - Date.now();
+      if (remaining > 0) {
+        timer = setTimeout(expire, Math.min(remaining, 2_147_483_647));
+        return;
+      }
+      if (sharedMode) {
+        setState((current) => current && pruneStickerWork(current));
+      } else {
+        try {
+          const cached = localStorage.getItem(LOCAL_KEY);
+          const next = pruneStickerWork(cached ? JSON.parse(cached) : state);
+          localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
+          setState(next);
+        } catch {
+          setState((current) => current && pruneStickerWork(current));
+          setError("만료된 스티커를 기기 저장소에서 정리하지 못했습니다.");
+        }
+      }
+    };
+    expire();
+    window.addEventListener("focus", expire);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("focus", expire);
+    };
+  }, [state]);
   const run = useCallback(
     async (command: Command) => {
       if (lock.current) throw new Error("저장 중입니다. 잠시 기다려 주세요.");
@@ -95,7 +108,12 @@ export function useStore() {
       setError("");
       try {
         if (!sharedMode) {
-          const next = applyCommand(stateRef.current, command, "체험 사용자");
+          const cached = localStorage.getItem(LOCAL_KEY);
+          const next = applyCommand(
+            cached ? JSON.parse(cached) : stateRef.current,
+            command,
+            "체험 사용자",
+          );
           localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
           setState(next);
         } else {

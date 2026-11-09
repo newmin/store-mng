@@ -11,6 +11,10 @@ import {
   fitStickerImageBox,
   expiredStickerIds,
   pruneStickerWork,
+  orderFromTemplate,
+  stickerExpiresAt,
+  stickerTemplates,
+  newStickerTemplate,
 } from "../src/lib/stickers";
 
 const asset = {
@@ -20,6 +24,70 @@ const asset = {
   image: "demo-menu:11111111-1111-4111-8111-111111111111",
 };
 describe("sticker library and drafts", () => {
+  it("edits each sample in place and creates independent stickers from it", () => {
+    let s = demoState();
+    const templates = stickerTemplates(s);
+    expect(templates).toHaveLength(2);
+    const sample = {
+      ...templates[0],
+      name: "수정한 꽃 템플릿",
+      tags: ["답례"],
+      text: "수정한\n예시 문구",
+    };
+    s = applyCommand(s, { type: "saveStickerDesign", design: sample }, "test");
+    expect(stickerTemplates(s)).toHaveLength(2);
+    expect(stickerTemplates(s).find((t) => t.id === sample.id)?.name).toBe(
+      sample.name,
+    );
+    const sticker = {
+      ...orderFromTemplate(sample, "sticker"),
+      text: "고객 문구",
+    };
+    s = applyCommand(s, { type: "saveStickerDesign", design: sticker }, "test");
+    expect(stickerTemplates(s).find((t) => t.id === sample.id)?.text).toBe(
+      sample.text,
+    );
+    expect(newStickerTemplate("new").text.split("\n")).toHaveLength(2);
+    expect(
+      stickerDesignSchema.safeParse({ ...sample, image: "/private/file.png" })
+        .success,
+    ).toBe(false);
+  });
+  it("keeps the template independent and anchors adjustable retention to the first save", () => {
+    const start = "2026-11-01T12:00:00.000Z";
+    const edit = "2026-11-03T12:00:00.000Z";
+    const template = { ...newStickerDesign("template"), text: "감사합니다" };
+    let s = applyCommand(
+      demoState(),
+      { type: "saveStickerDesign", design: template },
+      "test",
+      start,
+    );
+    const draft = orderFromTemplate(s.stickerDesigns![0], "customer");
+    draft.text = "첫돌을 축하합니다";
+    draft.retentionDays = 7;
+    const save = (design: typeof draft, at: string) =>
+      applyCommand(s, { type: "saveStickerDesign", design }, "test", at);
+    s = save(draft, start);
+    expect(s.stickerDesigns![0].text).toBe(template.text);
+    expect(s.stickerDesigns![1].createdAt).toBe(start);
+    expect(expiredStickerIds(s, "2026-11-08T12:00:00.000Z")).toEqual([
+      "customer",
+    ]);
+    s = save({ ...draft, retentionDays: 30, createdAt: edit }, edit);
+    const order = s.stickerDesigns![1];
+    expect(stickerExpiresAt(order, s)).toBe(
+      Date.parse("2026-12-01T12:00:00.000Z"),
+    );
+    expect(() => save({ ...order, retentionDays: 2 }, edit)).toThrow();
+    for (const days of [0, 31, 1.5])
+      expect(() => save({ ...order, retentionDays: days }, edit)).toThrow();
+    const deadline = "2026-12-01T12:00:00.000Z";
+    expect(() => save(order, deadline)).toThrow();
+    s = pruneStickerWork(s, deadline);
+    expect(() => save(order, deadline)).toThrow();
+    expect(s.stickerDesigns!.map((d) => d.id)).toEqual(["template"]);
+  });
   it("deletes a library component while preserving images in both current and legacy templates", () => {
     let s = applyCommand(
       demoState(),

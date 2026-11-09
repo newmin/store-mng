@@ -4,29 +4,44 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  ArrowRight,
+  Clock3,
   Copy,
+  Files,
   ImagePlus,
-  Pencil,
   Plus,
+  RectangleHorizontal,
+  Square,
   X,
+  StickyNote,
 } from "lucide-react";
 import { uid } from "@/lib/dates";
 import { resolveMenuImage, uploadMenuImage } from "@/lib/menu-image-client";
 import {
   drawSticker,
   collectStickerTags,
-  newStickerDesign,
+  newStickerTemplate,
+  stickerTemplates,
+  isStickerSampleImage,
   stickerBox,
   resizeStickerBox,
   fitStickerImageBox,
   isOrderSticker,
-  stickerMatches,
-  type StickerAsset,
+  orderFromTemplate,
+  MAX_STICKER_DAYS,
+  stickerExpiresAt,
   type StickerDesign,
 } from "@/lib/stickers";
 import type { Command, StoreState } from "@/lib/types";
 import { Notice } from "./notice";
-
+const expiryFormat = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 function useArtwork(path?: string) {
   const [loaded, setLoaded] = useState<{
     path: string;
@@ -39,7 +54,9 @@ function useArtwork(path?: string) {
     if (!path) return;
     async function load() {
       try {
-        const url = await resolveMenuImage(path!);
+        const url = isStickerSampleImage(path!)
+          ? path!
+          : await resolveMenuImage(path!);
         const response = await fetch(url);
         if (!response.ok) throw new Error("그림을 불러오지 못했습니다.");
         const blob = await response.blob();
@@ -64,105 +81,94 @@ function useArtwork(path?: string) {
   }, [path]);
   return { image: loaded && loaded.path === path ? loaded.image : null, error };
 }
-function Artwork({ asset }: { asset: StickerAsset }) {
-  const { image, error } = useArtwork(asset.image);
-  return image ? (
-    <img src={image.src} alt={asset.name} />
-  ) : (
-    <span>{error || "불러오는 중…"}</span>
-  );
-}
-function ArtworkGrid({
-  assets,
-  selected,
-  onSelect,
-  onEdit,
-  onDelete,
-  working,
-}: {
-  assets: StickerAsset[];
-  selected?: string;
-  onSelect: (asset: StickerAsset) => void;
-  onEdit?: (asset: StickerAsset) => void;
-  onDelete?: (asset: StickerAsset) => void;
-  working: boolean;
-}) {
-  return (
-    <div className="sticker-gallery">
-      {assets.map((a) => (
-        <article
-          key={a.id}
-          className={`sticker-art-card ${selected === a.id ? "selected" : ""}`}
-        >
-          <button
-            className="sticker-art-select"
-            disabled={working}
-            aria-label={a.name ? `${a.name} 그림 선택` : "그림 선택"}
-            onClick={() => onSelect(a)}
-          >
-            <Artwork asset={a} />
-          </button>
-          <div className="sticker-chips">
-            {a.tags.map((t) => (
-              <span key={t}>{t}</span>
-            ))}
-          </div>
-          {onEdit && (
-            <div className="button-row">
-              <button
-                className="text-button"
-                disabled={working}
-                onClick={() => onEdit(a)}
-              >
-                <Pencil size={14} />
-                편집
-              </button>
-              <button
-                className="text-button"
-                disabled={working}
-                onClick={() => onDelete?.(a)}
-              >
-                삭제
-              </button>
-            </div>
-          )}
-        </article>
-      ))}
-    </div>
-  );
-}
 
+function TemplateCard({
+  design,
+  imagePath,
+  onEdit,
+}: {
+  design: StickerDesign;
+  imagePath?: string;
+  onEdit: () => void;
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const { image, error } = useArtwork(imagePath);
+  useEffect(() => {
+    let active = true;
+    void document.fonts.ready.then(() => {
+      if (active && canvas.current) drawSticker(canvas.current, design, image);
+    });
+    return () => {
+      active = false;
+    };
+  }, [design, image]);
+  return (
+    <article className="sticker-template-card">
+      <button
+        className="sticker-template-select"
+        aria-label={`${design.name} 편집`}
+        onClick={onEdit}
+      >
+        <span className="sticker-sample">
+          <canvas ref={canvas} aria-hidden="true" />
+        </span>
+        <span className="sticker-template-name">{design.name}</span>
+      </button>
+      {error && <small role="status">{error}</small>}
+    </article>
+  );
+}
+export type StickerHeader = {
+  title: string;
+  back: (() => void) | null;
+  busy: boolean;
+};
 export function StickerWorkspace({
   state,
   run,
   onEditing,
+  initialOrderId,
+  onHeaderChange,
 }: {
   state: StoreState;
   run: (c: Command) => Promise<void>;
   onEditing: (dirty: boolean) => void;
+  initialOrderId?: string;
+  onHeaderChange: (header: StickerHeader) => void;
 }) {
-  const [tab, setTab] = useState<"library" | "studio">("studio");
-  const [editorActive, setEditorActive] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const picker = useRef<HTMLDialogElement>(null);
-  const [filters, setFilters] = useState<string[]>([]),
-    [query, setQuery] = useState("");
-  const [asset, setAsset] = useState<StickerAsset | null>(null),
-    [tag, setTag] = useState("");
-  const [design, setDesign] = useState<StickerDesign>(() =>
-    newStickerDesign(uid()),
+  const templates = stickerTemplates(state);
+  const [tab, setTab] = useState<"stickers" | "templates">("stickers");
+  const [editorActive, setEditorActive] = useState(() =>
+    state.orders.some((order) => order.id === initialOrderId),
   );
+  const [savedOrder, setSavedOrder] = useState(false);
+  const [templateId, setTemplateId] = useState(templates[0].id);
+  const [design, setDesign] = useState<StickerDesign>(() => {
+    const draft = orderFromTemplate(templates[0], uid());
+    const order = state.orders.find((o) => o.id === initialOrderId);
+    return order
+      ? {
+          ...draft,
+          orderId: order.id,
+          name: `${order.customer} ${order.date}`.slice(0, 80),
+          text: order.sticker || draft.text,
+        }
+      : draft;
+  });
   const [dirty, setDirty] = useState(false),
     [working, setWorking] = useState(false);
   const [notice, setNotice] = useState(""),
     [success, setSuccess] = useState("");
+  const [query, setQuery] = useState(""),
+    [tag, setTag] = useState("");
   const [selected, setSelected] = useState<"imageBox" | "textBox">("textBox");
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [overflow, setOverflow] = useState(false);
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const canvasArea = useRef<HTMLDivElement>(null);
+  const [panelOpen, setPanelOpen] = useState(false),
+    [overflow, setOverflow] = useState(false);
+  const canvas = useRef<HTMLCanvasElement>(null),
+    canvasArea = useRef<HTMLDivElement>(null);
   const adjustment = useRef<HTMLElement>(null);
-  const tagInput = useRef<HTMLInputElement>(null);
+  const photoInput = useRef<HTMLInputElement>(null),
+    tagInput = useRef<HTMLInputElement>(null);
   const composingTag = useRef(false);
   const drag = useRef<{
     id: number;
@@ -175,21 +181,64 @@ export function StickerWorkspace({
   const assets = state.stickerAssets || [];
   const artwork = assets.find((a) => a.id === design.assetId);
   const { image, error } = useArtwork(design.image || artwork?.image);
-  const tags = [...new Set(assets.flatMap((a) => a.tags))].sort();
-  const visible = assets.filter((a) =>
-    stickerMatches({ ...a, archived: false }, filters, query),
+  const designs = state.stickerDesigns || [];
+  const orders = designs
+    .filter(isOrderSticker)
+    .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+  const orderMode = isOrderSticker(design);
+  const persisted = designs.find((d) => d.id === design.id);
+  const expiry =
+    orderMode && persisted
+      ? stickerExpiresAt(
+          { ...persisted, retentionDays: design.retentionDays },
+          state,
+        )
+      : 0;
+  const visibleTemplates = templates.filter((d) =>
+    `${d.name} ${(d.tags || []).join(" ")}`
+      .toLocaleLowerCase()
+      .includes(query.trim().toLocaleLowerCase()),
   );
   useEffect(() => {
-    onEditing(dirty || !!asset);
+    onEditing(dirty);
     return () => onEditing(false);
-  }, [dirty, asset, onEditing]);
+  }, [dirty, onEditing]);
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (dirty || asset) e.preventDefault();
+      if (dirty) e.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty, asset]);
+  }, [dirty]);
+  useEffect(() => {
+    onHeaderChange({
+      title: tab === "templates" ? "템플릿" : "스티커",
+      busy: working,
+      back: editorActive
+        ? () => {
+            if (
+              working ||
+              (dirty && !confirm("저장하지 않은 변경을 버릴까요?"))
+            )
+              return;
+            setEditorActive(false);
+            setDirty(false);
+            setPanelOpen(false);
+            setSavedOrder(false);
+            setTag("");
+          }
+        : null,
+    });
+  }, [tab, editorActive, dirty, working, onHeaderChange]);
+  useEffect(() => {
+    if (savedOrder && !persisted) {
+      setSavedOrder(false);
+      setEditorActive(false);
+      setDirty(false);
+      setPanelOpen(false);
+      setNotice("보관 기간이 끝나 스티커가 삭제되었습니다.");
+    }
+  }, [savedOrder, persisted]);
   useEffect(() => {
     let active = true;
     void document.fonts.ready.then(() => {
@@ -206,13 +255,7 @@ export function StickerWorkspace({
     return () => {
       active = false;
     };
-  }, [design, image, selected, tab, panelOpen, editorActive]);
-  useEffect(() => {
-    if (!pickerOpen) return;
-    const dialog = picker.current;
-    dialog?.showModal();
-    return () => dialog?.close();
-  }, [pickerOpen]);
+  }, [design, image, selected, panelOpen, editorActive]);
   useEffect(() => {
     if (!panelOpen) return;
     const close = (e: KeyboardEvent) => {
@@ -221,16 +264,15 @@ export function StickerWorkspace({
         setPanelOpen(false);
       }
     };
-    window.addEventListener("keydown", close);
     const outside = (e: globalThis.PointerEvent) => {
       if (
-        !(e.target instanceof Node) ||
-        canvasArea.current?.contains(e.target) ||
-        adjustment.current?.contains(e.target)
+        e.target instanceof Node &&
+        !canvasArea.current?.contains(e.target) &&
+        !adjustment.current?.contains(e.target)
       )
-        return;
-      setPanelOpen(false);
+        setPanelOpen(false);
     };
+    window.addEventListener("keydown", close);
     document.addEventListener("pointerdown", outside, true);
     return () => {
       window.removeEventListener("keydown", close);
@@ -242,87 +284,83 @@ export function StickerWorkspace({
     setDirty(true);
   }
   function discard() {
-    return !dirty || confirm("저장하지 않은 디자인 변경을 버릴까요?");
+    return !dirty || confirm("저장하지 않은 변경을 버릴까요?");
   }
-  function loadDesign(saved: StickerDesign) {
-    if (!discard()) return;
+  function loadDesign(saved: StickerDesign, existingOrder = false) {
+    if (!discard()) return false;
     setDesign(structuredClone(saved));
+    setSavedOrder(existingOrder);
     setEditorActive(true);
     setDirty(false);
+    setTag("");
     setPanelOpen(false);
+    return true;
   }
-  function openPicker() {
-    setFilters([]);
-    setQuery("");
+  function switchTab(next: "stickers" | "templates") {
+    if (next === tab || !discard()) return;
+    setTab(next);
+    setDirty(false);
+    setTag("");
     setPanelOpen(false);
-    setPickerOpen(true);
+    setSavedOrder(false);
+    setEditorActive(false);
   }
-  function selectArtwork(a: StickerAsset) {
-    patch({
-      assetId: a.id,
-      image: a.image,
-      imageAspectLocked: true,
-      imageStretch: false,
-    });
-    setTab("studio");
-    setEditorActive(true);
-    setPickerOpen(false);
-    setSelected("imageBox");
-    setPanelOpen(true);
-    requestAnimationFrame(() =>
-      canvas.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    );
-  }
-  async function deleteArtwork(a: StickerAsset) {
+  function selectTemplate(id: string) {
+    const template = templates.find((t) => t.id === id);
+    if (!template) return;
+    const order = state.orders.find((o) => o.id === design.orderId);
     if (
-      !confirm(
-        "이 그림을 삭제할까요? 저장한 템플릿과 주문 작업의 그림은 유지됩니다.",
-      )
+      loadDesign({
+        ...orderFromTemplate(template, uid()),
+        ...(order
+          ? {
+              orderId: order.id,
+              name: `${order.customer} ${order.date}`.slice(0, 80),
+              text: order.sticker || template.text,
+            }
+          : {}),
+      })
     )
+      setTemplateId(id);
+  }
+  function importOrderText(id: string) {
+    const order = state.orders.find((o) => o.id === id);
+    if (order && design.text && !confirm("현재 문구를 주문 문구로 바꿀까요?"))
       return;
-    setWorking(true);
-    try {
-      await run({ type: "deleteStickerAsset", id: a.id });
-      if (asset?.id === a.id) setAsset(null);
-      if (design.assetId === a.id)
-        setDesign((d) => ({
-          ...d,
-          assetId: undefined,
-          image: d.image || a.image,
-        }));
-      setSuccess("그림을 삭제했습니다.");
-    } catch (e) {
-      setNotice((e as Error).message);
-    } finally {
-      setWorking(false);
-    }
+    const copyForOrder = savedOrder && order && order.id !== design.orderId;
+    if (copyForOrder) setSavedOrder(false);
+    patch({
+      ...(copyForOrder ? orderFromTemplate(design, uid()) : {}),
+      orderId: order?.id,
+      ...(order
+        ? {
+            name: `${order.customer} ${order.date}`.slice(0, 80),
+            text: order.sticker || design.text,
+          }
+        : {}),
+    });
   }
   function updateTags(value: string, complete = false) {
-    if (!asset) return;
     try {
-      const result = collectStickerTags(asset.tags, value, complete);
-      setAsset({ ...asset, tags: result.tags });
+      const result = collectStickerTags(design.tags || [], value, complete);
+      patch({ tags: result.tags });
       setTag(result.remaining);
     } catch (e) {
       setTag(value);
       setNotice((e as Error).message);
     }
   }
-  function addTag() {
-    updateTags(tag, true);
-    tagInput.current?.focus({ preventScroll: true });
-  }
-  async function saveAsset() {
-    if (!asset) return;
+  async function attachPhoto(file?: File) {
+    if (!file) return;
     setWorking(true);
     try {
-      const result = collectStickerTags(asset.tags, tag, true);
-      await run({
-        type: "saveStickerAsset",
-        asset: { ...asset, tags: result.tags },
+      const image = await uploadMenuImage(file);
+      patch({
+        image,
+        assetId: undefined,
+        imageAspectLocked: true,
+        imageStretch: false,
       });
-      setAsset(null);
-      setSuccess("그림을 저장했습니다.");
     } catch (e) {
       setNotice((e as Error).message);
     } finally {
@@ -330,15 +368,36 @@ export function StickerWorkspace({
     }
   }
   async function saveDesign() {
+    if (savedOrder && !persisted) return;
     if (!design.name.trim()) {
-      setNotice("디자인 이름을 입력해 주세요.");
+      setNotice(
+        orderMode
+          ? "스티커 이름을 입력해 주세요."
+          : "템플릿명을 입력해 주세요.",
+      );
       return;
     }
     setWorking(true);
     try {
-      await run({ type: "saveStickerDesign", design });
+      const tags = orderMode
+        ? design.tags
+        : collectStickerTags(design.tags || [], tag, true).tags;
+      await run({
+        type: "saveStickerDesign",
+        design: {
+          ...design,
+          tags,
+          createdAt: persisted?.createdAt,
+          updatedAt: persisted?.updatedAt,
+        },
+      });
+      setDesign((d) => ({ ...d, tags }));
+      setTag("");
       setDirty(false);
-      setSuccess("디자인을 저장했습니다.");
+      setSavedOrder(orderMode);
+      setSuccess(
+        orderMode ? "스티커를 저장했습니다." : "템플릿을 저장했습니다.",
+      );
     } catch (e) {
       setNotice((e as Error).message);
     } finally {
@@ -367,7 +426,7 @@ export function StickerWorkspace({
     setSuccess("");
     if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
       setNotice(
-        "이 브라우저에서는 이미지 복사를 지원하지 않습니다. PNG 저장을 이용해 주세요.",
+        "이 브라우저에서는 이미지 복사를 지원하지 않습니다. Chrome 또는 Safari에서 열어 주세요.",
       );
       return;
     }
@@ -380,24 +439,8 @@ export function StickerWorkspace({
       setSuccess("이미지를 복사했습니다.");
     } catch {
       setNotice(
-        "이미지를 복사하지 못했습니다. 복사 권한을 확인하거나 PNG 저장을 이용해 주세요.",
+        "이미지를 복사하지 못했습니다. 브라우저의 클립보드 권한을 확인하고 다시 시도해 주세요.",
       );
-    } finally {
-      setWorking(false);
-    }
-  }
-  async function download() {
-    setWorking(true);
-    try {
-      const blob = await makePng();
-      const url = URL.createObjectURL(blob),
-        a = document.createElement("a");
-      a.href = url;
-      a.download = `${design.name.replace(/[\\/:*?"<>|]/g, "_")}.png`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (e) {
-      setNotice((e as Error).message);
     } finally {
       setWorking(false);
     }
@@ -453,6 +496,7 @@ export function StickerWorkspace({
           : stickerBox({ ...d.box, x: d.box.x + dx, y: d.box.y + dy }),
     });
   }
+
   return (
     <div className="stickers">
       {notice && <Notice message={notice} onDismiss={() => setNotice("")} />}
@@ -464,486 +508,104 @@ export function StickerWorkspace({
           onDismiss={() => setSuccess("")}
         />
       )}
-      <div className="sticker-tabs" role="group" aria-label="스티커 화면">
+      <div
+        className="sticker-tabs sticker-navigation"
+        role="group"
+        aria-label="스티커 화면"
+      >
         <button
-          type="button"
-          aria-pressed={tab === "studio"}
-          onClick={() => setTab("studio")}
+          disabled={working}
+          aria-pressed={tab === "stickers"}
+          onClick={() => switchTab("stickers")}
         >
-          스티커 제작{dirty ? " · 미저장" : ""}
+          <StickyNote size={16} />
+          스티커
         </button>
         <button
-          type="button"
-          aria-pressed={tab === "library"}
-          onClick={() => {
-            setTab("library");
-            setPanelOpen(false);
-          }}
+          disabled={working}
+          aria-pressed={tab === "templates"}
+          onClick={() => switchTab("templates")}
         >
-          그림 관리
+          <Files size={16} />
+          템플릿
         </button>
       </div>
-      {tab === "studio" && (
-        <section className="sticker-template-loader">
-          <label>
-            템플릿 불러오기
-            <select
-              aria-label="템플릿 불러오기"
-              value={
-                editorActive &&
-                !isOrderSticker(design) &&
-                state.stickerDesigns?.some((d) => d.id === design.id)
-                  ? design.id
-                  : ""
-              }
-              onChange={(e) => {
-                const saved = state.stickerDesigns?.find(
-                  (d) => d.id === e.target.value,
-                );
-                if (saved) loadDesign(saved);
-              }}
+      {tab === "templates" && !editorActive && (
+        <section className="sticker-collection">
+          <header className="sticker-section-heading">
+            <h2>템플릿</h2>
+            <button
+              className="button primary"
+              onClick={() => loadDesign(newStickerTemplate(uid()))}
             >
-              <option value="">템플릿 선택</option>
-              {state.stickerDesigns
-                ?.filter((d) => !isOrderSticker(d))
-                .map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() => {
-              if (!discard()) return;
-              setDesign({
-                ...newStickerDesign(uid()),
-                name: "새 템플릿",
-                kind: "template",
-              });
-              setEditorActive(true);
-              setDirty(false);
-              openPicker();
-            }}
-          >
-            <Plus size={16} />새 템플릿
-          </button>
-          {!!state.stickerDesigns?.some(isOrderSticker) && (
-            <details className="sticker-recent-work">
-              <summary>최근 주문 작업</summary>
-              <select
-                aria-label="주문 작업 불러오기"
-                value={isOrderSticker(design) ? design.id : ""}
-                onChange={(e) => {
-                  const saved = state.stickerDesigns?.find(
-                    (d) => d.id === e.target.value,
-                  );
-                  if (saved) loadDesign(saved);
-                }}
-              >
-                <option value="">주문 작업 선택</option>
-                {state.stickerDesigns.filter(isOrderSticker).map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </details>
-          )}
-        </section>
-      )}
-      {tab === "library" && (
-        <div className="sticker-filters">
+              <Plus size={16} />새 템플릿
+            </button>
+          </header>
           <input
-            aria-label="스티커 그림 검색"
-            placeholder="그림 검색"
+            aria-label="템플릿 검색"
+            placeholder="이름·태그 검색"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <div
-            className="sticker-chips"
-            role="group"
-            aria-label="그림 태그 필터"
-          >
-            <button
-              aria-pressed={!filters.length}
-              onClick={() => setFilters([])}
-            >
-              전체
-            </button>
-            {tags.map((t) => (
-              <button
-                key={t}
-                aria-pressed={filters.includes(t)}
-                onClick={() =>
-                  setFilters(
-                    filters.includes(t)
-                      ? filters.filter((v) => v !== t)
-                      : [...filters, t],
-                  )
+          <div className="sticker-template-grid">
+            {visibleTemplates.map((d) => (
+              <TemplateCard
+                key={d.id}
+                design={d}
+                imagePath={
+                  d.image || assets.find((a) => a.id === d.assetId)?.image
                 }
-              >
-                {t}
-              </button>
+                onEdit={() => loadDesign(d)}
+              />
             ))}
           </div>
-        </div>
-      )}
-      {tab === "library" && (
-        <>
-          <button
-            className="button secondary"
-            disabled={working}
-            onClick={() => {
-              if (asset && !confirm("그림 편집을 닫을까요?")) return;
-              setAsset({ id: uid(), name: "", image: "", tags: [] });
-              setTag("");
-            }}
-          >
-            <ImagePlus size={17} />
-            그림 등록
-          </button>
-          {asset && (
-            <form
-              className="sticker-asset-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void saveAsset();
-              }}
-            >
-              <fieldset disabled={working}>
-                <label>
-                  이미지
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      setWorking(true);
-                      try {
-                        const path = await uploadMenuImage(file);
-                        setAsset((a) =>
-                          a
-                            ? {
-                                ...a,
-                                image: path,
-                              }
-                            : a,
-                        );
-                      } catch (err) {
-                        setNotice((err as Error).message);
-                      } finally {
-                        setWorking(false);
-                        e.target.value = "";
-                      }
-                    }}
-                  />
-                </label>
-                {asset.image && (
-                  <div className="sticker-upload-preview">
-                    <Artwork asset={asset} />
-                  </div>
-                )}
-                <div className="sticker-chips">
-                  {asset.tags.map((t) => (
-                    <button
-                      type="button"
-                      key={t}
-                      onClick={() =>
-                        setAsset({
-                          ...asset,
-                          tags: asset.tags.filter((v) => v !== t),
-                        })
-                      }
-                      aria-label={`${t} 태그 삭제`}
-                    >
-                      {t}
-                      <X size={12} />
-                    </button>
-                  ))}
-                </div>
-                <div className="sticker-tag-input">
-                  <input
-                    ref={tagInput}
-                    aria-label="추가할 태그"
-                    value={tag}
-                    maxLength={1024}
-                    autoComplete="off"
-                    onCompositionStart={() => {
-                      composingTag.current = true;
-                    }}
-                    onCompositionEnd={(e) => {
-                      composingTag.current = false;
-                      updateTags(e.currentTarget.value);
-                    }}
-                    onChange={(e) => {
-                      if (
-                        composingTag.current ||
-                        (e.nativeEvent as InputEvent).isComposing
-                      )
-                        setTag(e.target.value);
-                      else updateTags(e.target.value);
-                    }}
-                    onKeyDown={(e) => {
-                      if (
-                        e.key === "Enter" &&
-                        !e.nativeEvent.isComposing &&
-                        !composingTag.current
-                      ) {
-                        e.preventDefault();
-                        addTag();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="button secondary"
-                    onPointerDown={(e) => e.preventDefault()}
-                    onClick={addTag}
-                  >
-                    태그 추가
-                  </button>
-                </div>
-                <div className="button-row">
-                  <button className="button primary" disabled={!asset.image}>
-                    그림 저장
-                  </button>
-                  <button
-                    type="button"
-                    className="button secondary"
-                    onClick={() => {
-                      setAsset(null);
-                      setTag("");
-                    }}
-                  >
-                    닫기
-                  </button>
-                </div>
-              </fieldset>
-            </form>
+          {!visibleTemplates.length && (
+            <p className="sticker-empty">검색한 템플릿이 없습니다.</p>
           )}
-        </>
+        </section>
       )}
-      {tab === "studio" && editorActive && (
-        <div className="sticker-studio">
-          <section className="sticker-preview">
-            <div className="sticker-tabs" role="group" aria-label="조정 대상">
-              <button type="button" onClick={openPicker}>
-                <ImagePlus size={16} />
-                {design.image || design.assetId
-                  ? "그림 추가·변경"
-                  : "그림 추가"}
-              </button>
-              {image && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected("imageBox");
-                    setPanelOpen(true);
-                  }}
-                >
-                  그림 편집
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setSelected("textBox");
-                  setPanelOpen(true);
-                }}
-              >
-                문구 편집
-              </button>
-            </div>
-            <div ref={canvasArea} className="sticker-canvas">
-              <canvas
-                ref={canvas}
-                aria-label="스티커 디자인 미리보기"
-                onPointerDown={pointerDown}
-                onPointerMove={movePointer}
-                onPointerUp={() => {
-                  drag.current = null;
-                  const rect = canvas.current?.getBoundingClientRect();
-                  if (rect && rect.bottom > window.innerHeight * 0.6)
-                    canvas.current?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "start",
-                    });
-                }}
-                onPointerCancel={() => {
-                  drag.current = null;
-                }}
-              />
-              {panelOpen && (
-                <button
-                  type="button"
-                  className="sticker-resize-handle"
-                  aria-label={
-                    selected === "imageBox"
-                      ? "그림 크기 조절"
-                      : "문구 영역 크기 조절"
-                  }
-                  style={{
-                    left: `${design[selected].x + design[selected].width}%`,
-                    top: `${design[selected].y + design[selected].height}%`,
-                  }}
-                  onPointerDown={(e) => {
-                    if (e.button !== 0) return;
-                    e.preventDefault();
-                    drag.current = {
-                      id: e.pointerId,
-                      x: e.clientX,
-                      y: e.clientY,
-                      box: design[selected],
-                      layer: selected,
-                      mode: "resize",
-                    };
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                  }}
-                  onPointerMove={movePointer}
-                  onPointerUp={() => {
-                    drag.current = null;
-                  }}
-                  onPointerCancel={() => {
-                    drag.current = null;
-                  }}
-                  onKeyDown={(e) => {
-                    const delta = (
-                      {
-                        ArrowRight: [1, 0],
-                        ArrowLeft: [-1, 0],
-                        ArrowDown: [0, 1],
-                        ArrowUp: [0, -1],
-                      } as Record<string, number[]>
-                    )[e.key];
-                    if (!delta) return;
-                    e.preventDefault();
-                    patch({
-                      [selected]: resizeStickerBox(
-                        design[selected],
-                        delta[0],
-                        delta[1],
-                        selected === "imageBox" &&
-                          design.imageAspectLocked !== false,
-                      ),
-                    });
-                  }}
-                >
-                  <span aria-hidden="true" />
-                </button>
-              )}
-            </div>
-            {(overflow || error) && (
-              <p role="status" className="danger-text">
-                {error ||
-                  "문구가 영역을 넘었습니다. 글자 크기나 문구 영역을 조절해 주세요."}
-              </p>
-            )}
-            <div className="button-row">
-              <button
-                className="button primary"
-                disabled={working}
-                onClick={() => void saveDesign()}
-              >
-                디자인 저장
-              </button>
-              <button
-                className="button secondary"
-                disabled={
-                  working ||
-                  overflow ||
-                  !!((design.assetId || design.image) && !image)
-                }
-                onClick={() => void download()}
-              >
-                PNG 저장
-              </button>
-              <button
-                type="button"
-                className="button secondary"
-                aria-label="스티커 이미지 복사"
-                title="이미지 복사"
-                disabled={
-                  working ||
-                  overflow ||
-                  !!((design.assetId || design.image) && !image)
-                }
-                onClick={() => void copyImage()}
-              >
-                <Copy size={19} />
-              </button>
-            </div>
-          </section>
-          <section className="sticker-controls sticker-document">
-            <details>
-              <summary>디자인 정보</summary>
+      {editorActive && (
+        <>
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            aria-label="사진 첨부"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              void attachPhoto(file);
+            }}
+          />
+          {orderMode && (
+            <section className="sticker-controls sticker-source-controls">
               <fieldset disabled={working}>
                 <label>
-                  저장 구분
+                  템플릿
                   <select
-                    aria-label="저장 구분"
-                    value={isOrderSticker(design) ? "order" : "template"}
-                    onChange={(e) =>
-                      patch({
-                        kind: e.target.value as "order" | "template",
-                        ...(state.stickerDesigns?.some(
-                          (d) => d.id === design.id,
-                        )
-                          ? { id: uid() }
-                          : {}),
-                      })
-                    }
+                    aria-label="템플릿 선택"
+                    value={templateId}
+                    onChange={(e) => selectTemplate(e.target.value)}
                   >
-                    <option value="template">재사용 템플릿</option>
-                    <option value="order">주문 작업 · 30일 보관</option>
+                    {!templateId && <option value="">템플릿 선택</option>}
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label>
-                  디자인 이름
-                  <input
-                    value={design.name}
-                    maxLength={80}
-                    onChange={(e) => patch({ name: e.target.value })}
-                  />
-                </label>
-                <label>
-                  주문 문구 가져오기
+                  주문
                   <select
-                    aria-label="주문 문구 가져오기"
+                    aria-label="주문 선택"
                     value={design.orderId || ""}
-                    onChange={(e) => {
-                      const order = state.orders.find(
-                        (o) => o.id === e.target.value,
-                      );
-                      if (
-                        order &&
-                        design.text &&
-                        !confirm("현재 문구를 주문 문구로 바꿀까요?")
-                      )
-                        return;
-                      patch({
-                        orderId: order?.id,
-                        kind: order ? "order" : "template",
-                        ...(order &&
-                        state.stickerDesigns?.some((d) => d.id === design.id) &&
-                        (!isOrderSticker(design) || design.orderId !== order.id)
-                          ? {
-                              id: uid(),
-                              name: `${order.customer} ${order.date}`,
-                            }
-                          : {}),
-                        text: order?.sticker || design.text,
-                      });
-                    }}
+                    onChange={(e) => importOrderText(e.target.value)}
                   >
                     <option value="">직접 입력</option>
                     {state.orders
-                      .filter(
-                        (o) => o.status !== "cancelled" && o.sticker.trim(),
-                      )
+                      .filter((o) => o.status !== "cancelled")
                       .sort((a, b) => b.date.localeCompare(a.date))
                       .map((o) => (
                         <option key={o.id} value={o.id}>
@@ -952,293 +614,513 @@ export function StickerWorkspace({
                       ))}
                   </select>
                 </label>
-                <label>
-                  모양
-                  <select
-                    aria-label="모양"
-                    value={design.shape}
-                    onChange={(e) =>
-                      patch({ shape: e.target.value as StickerDesign["shape"] })
-                    }
-                  >
-                    <option value="wide">가로형</option>
-                    <option value="square">정사각형</option>
-                  </select>
-                </label>
-              </fieldset>
-            </details>
-          </section>
-          {panelOpen && (
-            <section
-              ref={adjustment}
-              className="sticker-controls sticker-adjustment"
-              role="dialog"
-              aria-modal="false"
-              aria-label={selected === "imageBox" ? "그림 조정" : "문구 조정"}
-            >
-              <header>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="조정창 닫기"
-                  onClick={() => setPanelOpen(false)}
-                >
-                  <X size={20} />
-                </button>
-              </header>
-              <fieldset disabled={working}>
-                {selected === "textBox" && (
-                  <>
-                    <label>
-                      문구
-                      <textarea
-                        aria-label="문구"
-                        rows={2}
-                        maxLength={2000}
-                        value={design.text}
-                        onChange={(e) => patch({ text: e.target.value })}
-                      />
-                    </label>
-                    <label>
-                      글꼴
-                      <select
-                        aria-label="글꼴"
-                        value={design.font}
-                        onChange={(e) =>
-                          patch({
-                            font: e.target.value as StickerDesign["font"],
-                          })
-                        }
-                      >
-                        <option value="sans">고딕</option>
-                        <option value="serif">명조</option>
-                        <option value="mono">고정폭</option>
-                      </select>
-                    </label>
-                    <label>
-                      글자 크기
-                      <input
-                        type="range"
-                        min={12}
-                        max={100}
-                        value={design.fontSize}
-                        onChange={(e) =>
-                          patch({ fontSize: Number(e.target.value) })
-                        }
-                      />
-                      {design.fontSize}
-                    </label>
-                    <div
-                      className="sticker-text-tools"
-                      role="toolbar"
-                      aria-label="문구 서식"
-                    >
-                      <button
-                        type="button"
-                        aria-label="굵게"
-                        aria-pressed={design.bold}
-                        onClick={() => patch({ bold: !design.bold })}
-                        className="sticker-bold"
-                      >
-                        굵
-                      </button>
-                      {(
-                        [
-                          {
-                            value: "left",
-                            label: "왼쪽 정렬",
-                            Icon: AlignLeft,
-                          },
-                          {
-                            value: "center",
-                            label: "가운데 정렬",
-                            Icon: AlignCenter,
-                          },
-                          {
-                            value: "right",
-                            label: "오른쪽 정렬",
-                            Icon: AlignRight,
-                          },
-                        ] as const
-                      ).map(({ value, label, Icon }) => (
-                        <button
-                          type="button"
-                          key={value}
-                          aria-label={label}
-                          title={label}
-                          aria-pressed={design.align === value}
-                          onClick={() => patch({ align: value })}
-                        >
-                          <Icon size={19} />
-                        </button>
-                      ))}
-                      <input
-                        type="color"
-                        aria-label="글자 색"
-                        title="글자 색"
-                        value={design.color}
-                        onChange={(e) => patch({ color: e.target.value })}
-                      />
-                    </div>
-                  </>
-                )}
-                {selected === "imageBox" &&
-                  (design.assetId || design.image) && (
-                    <>
-                      <div
-                        className="sticker-tabs sticker-aspect"
-                        role="group"
-                        aria-label="그림 비율"
-                      >
-                        <button
-                          type="button"
-                          aria-pressed={design.imageAspectLocked !== false}
-                          onClick={() => patch({ imageAspectLocked: true })}
-                        >
-                          비율 고정
-                        </button>
-                        <button
-                          type="button"
-                          aria-pressed={design.imageAspectLocked === false}
-                          disabled={!image}
-                          onClick={() =>
-                            patch({
-                              imageAspectLocked: false,
-                              imageStretch: true,
-                              ...(!design.imageStretch && image
-                                ? {
-                                    imageBox: fitStickerImageBox(
-                                      design.imageBox,
-                                      image.naturalWidth,
-                                      image.naturalHeight,
-                                      design.shape,
-                                    ),
-                                  }
-                                : {}),
-                            })
-                          }
-                        >
-                          자유
-                        </button>
-                      </div>
-                      <button
-                        className="text-button"
-                        onClick={() =>
-                          patch({ assetId: undefined, image: undefined })
-                        }
-                      >
-                        그림 빼기
-                      </button>
-                    </>
-                  )}
               </fieldset>
             </section>
           )}
-        </div>
-      )}
-      {tab === "library" && (
-        <ArtworkGrid
-          assets={visible}
-          working={working}
-          onSelect={selectArtwork}
-          onEdit={(a) => {
-            if (asset && !confirm("그림 편집을 닫을까요?")) return;
-            setAsset(structuredClone(a));
-            setTag("");
-          }}
-          onDelete={(a) => void deleteArtwork(a)}
-        />
-      )}
-      {tab === "library" && !visible.length && (
-        <p className="sticker-empty">
-          {assets.length
-            ? "선택한 조건의 그림이 없습니다."
-            : "재사용할 스티커 그림을 등록해 주세요."}
-        </p>
-      )}
-      {pickerOpen && (
-        <dialog
-          ref={picker}
-          className="sticker-image-picker"
-          aria-labelledby="sticker-picker-title"
-          onCancel={(e) => {
-            e.preventDefault();
-            setPickerOpen(false);
-          }}
-        >
-          <header>
-            <h2 id="sticker-picker-title">그림 선택</h2>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="그림 선택 닫기"
-              onClick={() => setPickerOpen(false)}
-            >
-              <X size={20} />
-            </button>
-          </header>
-          <input
-            aria-label="선택할 그림 검색"
-            placeholder="그림 검색"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <div
-            className="sticker-chips"
-            role="group"
-            aria-label="선택할 그림 태그"
-          >
-            <button
-              type="button"
-              aria-pressed={!filters.length}
-              onClick={() => setFilters([])}
-            >
-              전체
-            </button>
-            {tags.map((t) => (
-              <button
-                type="button"
-                key={t}
-                aria-pressed={filters.includes(t)}
-                onClick={() =>
-                  setFilters(
-                    filters.includes(t)
-                      ? filters.filter((v) => v !== t)
-                      : [...filters, t],
-                  )
-                }
+          <div className="sticker-studio">
+            <section className="sticker-preview">
+              <div className="sticker-tabs" role="group" aria-label="조정 대상">
+                <button
+                  type="button"
+                  disabled={working}
+                  onClick={() => photoInput.current?.click()}
+                >
+                  <ImagePlus size={16} />
+                  {design.image || design.assetId ? "사진 변경" : "사진 추가"}
+                </button>
+                {image && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelected("imageBox");
+                      setPanelOpen(true);
+                    }}
+                  >
+                    사진 편집
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelected("textBox");
+                    setPanelOpen(true);
+                  }}
+                >
+                  문구 편집
+                </button>
+              </div>
+              <div ref={canvasArea} className="sticker-canvas">
+                <canvas
+                  ref={canvas}
+                  aria-label="스티커 디자인 미리보기"
+                  onPointerDown={pointerDown}
+                  onPointerMove={movePointer}
+                  onPointerUp={() => {
+                    drag.current = null;
+                    const rect = canvas.current?.getBoundingClientRect();
+                    if (rect && rect.bottom > window.innerHeight * 0.6)
+                      canvas.current?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                  }}
+                  onPointerCancel={() => {
+                    drag.current = null;
+                  }}
+                />
+                {panelOpen && (
+                  <button
+                    type="button"
+                    className="sticker-resize-handle"
+                    aria-label={
+                      selected === "imageBox"
+                        ? "그림 크기 조절"
+                        : "문구 영역 크기 조절"
+                    }
+                    style={{
+                      left: `${design[selected].x + design[selected].width}%`,
+                      top: `${design[selected].y + design[selected].height}%`,
+                    }}
+                    onPointerDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.preventDefault();
+                      drag.current = {
+                        id: e.pointerId,
+                        x: e.clientX,
+                        y: e.clientY,
+                        box: design[selected],
+                        layer: selected,
+                        mode: "resize",
+                      };
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                    }}
+                    onPointerMove={movePointer}
+                    onPointerUp={() => {
+                      drag.current = null;
+                    }}
+                    onPointerCancel={() => {
+                      drag.current = null;
+                    }}
+                    onKeyDown={(e) => {
+                      const delta = (
+                        {
+                          ArrowRight: [1, 0],
+                          ArrowLeft: [-1, 0],
+                          ArrowDown: [0, 1],
+                          ArrowUp: [0, -1],
+                        } as Record<string, number[]>
+                      )[e.key];
+                      if (!delta) return;
+                      e.preventDefault();
+                      patch({
+                        [selected]: resizeStickerBox(
+                          design[selected],
+                          delta[0],
+                          delta[1],
+                          selected === "imageBox" &&
+                            design.imageAspectLocked !== false,
+                        ),
+                      });
+                    }}
+                  >
+                    <span aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+              {(overflow || error) && (
+                <p role="status" className="danger-text">
+                  {error ||
+                    "문구가 영역을 넘었습니다. 글자 크기나 문구 영역을 조절해 주세요."}
+                </p>
+              )}
+            </section>
+
+            <section className="sticker-controls sticker-document">
+              <fieldset disabled={working}>
+                <label>
+                  {orderMode ? "스티커 이름" : "템플릿명"}
+                  <input
+                    aria-label={orderMode ? "스티커 이름" : "템플릿명"}
+                    value={design.name}
+                    maxLength={80}
+                    onChange={(e) => patch({ name: e.target.value })}
+                  />
+                </label>
+                {!orderMode && (
+                  <div className="sticker-template-tags">
+                    <label>
+                      태그
+                      <div className="sticker-tag-input">
+                        <input
+                          ref={tagInput}
+                          aria-label="템플릿 태그"
+                          placeholder="띄어쓰기 또는 쉼표(,)로 태그 추가"
+                          value={tag}
+                          onChange={(e) =>
+                            composingTag.current
+                              ? setTag(e.target.value)
+                              : updateTags(e.target.value)
+                          }
+                          onCompositionStart={() => {
+                            composingTag.current = true;
+                          }}
+                          onCompositionEnd={(e) => {
+                            composingTag.current = false;
+                            updateTags(e.currentTarget.value);
+                          }}
+                          onKeyDown={(e) => {
+                            if (
+                              e.key === "Enter" &&
+                              !e.nativeEvent.isComposing &&
+                              !composingTag.current
+                            ) {
+                              e.preventDefault();
+                              updateTags(tag, true);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="button secondary"
+                          onClick={() => {
+                            updateTags(tag, true);
+                            tagInput.current?.focus();
+                          }}
+                        >
+                          추가
+                        </button>
+                      </div>
+                    </label>
+                    <div className="sticker-chips">
+                      {(design.tags || []).map((t) => (
+                        <button
+                          type="button"
+                          aria-label={`${t} 태그 삭제`}
+                          key={t}
+                          onClick={() =>
+                            patch({ tags: design.tags?.filter((v) => v !== t) })
+                          }
+                        >
+                          {t}
+                          <X size={12} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <label>
+                  {orderMode ? "스티커 문구" : "예시 문구"}
+                  <textarea
+                    aria-label={orderMode ? "스티커 문구" : "예시 문구"}
+                    rows={3}
+                    maxLength={2000}
+                    value={design.text}
+                    onChange={(e) => patch({ text: e.target.value })}
+                  />
+                </label>
+                <div className="sticker-options">
+                  <div
+                    className="sticker-shape-picker"
+                    role="group"
+                    aria-label="모양"
+                  >
+                    <span>모양</span>
+                    <div className="sticker-tabs">
+                      <button
+                        type="button"
+                        aria-label="직사각형"
+                        title="직사각형"
+                        aria-pressed={design.shape === "wide"}
+                        onClick={() => patch({ shape: "wide" })}
+                      >
+                        <RectangleHorizontal size={22} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="정사각형"
+                        title="정사각형"
+                        aria-pressed={design.shape === "square"}
+                        onClick={() => patch({ shape: "square" })}
+                      >
+                        <Square size={22} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                  {orderMode && (
+                    <label>
+                      보관 기간
+                      <select
+                        aria-label="보관 기간"
+                        value={design.retentionDays ?? MAX_STICKER_DAYS}
+                        onChange={(e) =>
+                          patch({ retentionDays: Number(e.target.value) })
+                        }
+                      >
+                        {Array.from(
+                          { length: MAX_STICKER_DAYS },
+                          (_, i) => i + 1,
+                        ).map((days) => (
+                          <option
+                            key={days}
+                            value={days}
+                            disabled={
+                              !!persisted &&
+                              stickerExpiresAt(
+                                { ...persisted, retentionDays: days },
+                                state,
+                              ) <= Date.now()
+                            }
+                          >
+                            {days}일
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+                {orderMode && (
+                  <small className="sticker-expiry">
+                    <Clock3 size={15} />
+                    {expiry
+                      ? `${expiryFormat.format(expiry)} 삭제 예정`
+                      : `최초 저장일부터 ${design.retentionDays ?? MAX_STICKER_DAYS}일 후 자동 삭제`}
+                  </small>
+                )}
+              </fieldset>
+              <div className="button-row">
+                <button
+                  className="button primary"
+                  disabled={working}
+                  onClick={() => void saveDesign()}
+                >
+                  {orderMode ? "스티커 저장" : "템플릿 저장"}
+                </button>
+                {orderMode && (
+                  <button
+                    className="button secondary"
+                    disabled={
+                      working ||
+                      overflow ||
+                      !!((design.assetId || design.image) && !image)
+                    }
+                    onClick={() => void copyImage()}
+                  >
+                    <Copy size={17} />
+                    이미지 복사
+                  </button>
+                )}
+              </div>
+            </section>
+            {panelOpen && (
+              <section
+                ref={adjustment}
+                className="sticker-controls sticker-adjustment"
+                role="dialog"
+                aria-modal="false"
+                aria-label={selected === "imageBox" ? "그림 조정" : "문구 조정"}
               >
-                {t}
-              </button>
-            ))}
+                <header>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="조정창 닫기"
+                    onClick={() => setPanelOpen(false)}
+                  >
+                    <X size={20} />
+                  </button>
+                </header>
+                <fieldset disabled={working}>
+                  {selected === "textBox" && (
+                    <>
+                      <label>
+                        문구
+                        <textarea
+                          aria-label="문구"
+                          rows={2}
+                          maxLength={2000}
+                          value={design.text}
+                          onChange={(e) => patch({ text: e.target.value })}
+                        />
+                      </label>
+                      <label>
+                        글꼴
+                        <select
+                          aria-label="글꼴"
+                          value={design.font}
+                          onChange={(e) =>
+                            patch({
+                              font: e.target.value as StickerDesign["font"],
+                            })
+                          }
+                        >
+                          <option value="sans">고딕</option>
+                          <option value="serif">명조</option>
+                          <option value="mono">고정폭</option>
+                        </select>
+                      </label>
+                      <label>
+                        글자 크기
+                        <input
+                          type="range"
+                          min={12}
+                          max={100}
+                          value={design.fontSize}
+                          onChange={(e) =>
+                            patch({ fontSize: Number(e.target.value) })
+                          }
+                        />
+                        {design.fontSize}
+                      </label>
+                      <div
+                        className="sticker-text-tools"
+                        role="toolbar"
+                        aria-label="문구 서식"
+                      >
+                        <button
+                          type="button"
+                          aria-label="굵게"
+                          aria-pressed={design.bold}
+                          onClick={() => patch({ bold: !design.bold })}
+                          className="sticker-bold"
+                        >
+                          굵
+                        </button>
+                        {(
+                          [
+                            {
+                              value: "left",
+                              label: "왼쪽 정렬",
+                              Icon: AlignLeft,
+                            },
+                            {
+                              value: "center",
+                              label: "가운데 정렬",
+                              Icon: AlignCenter,
+                            },
+                            {
+                              value: "right",
+                              label: "오른쪽 정렬",
+                              Icon: AlignRight,
+                            },
+                          ] as const
+                        ).map(({ value, label, Icon }) => (
+                          <button
+                            type="button"
+                            key={value}
+                            aria-label={label}
+                            title={label}
+                            aria-pressed={design.align === value}
+                            onClick={() => patch({ align: value })}
+                          >
+                            <Icon size={19} />
+                          </button>
+                        ))}
+                        <input
+                          type="color"
+                          aria-label="글자 색"
+                          title="글자 색"
+                          value={design.color}
+                          onChange={(e) => patch({ color: e.target.value })}
+                        />
+                      </div>
+                    </>
+                  )}
+                  {selected === "imageBox" &&
+                    (design.assetId || design.image) && (
+                      <>
+                        <div
+                          className="sticker-tabs sticker-aspect"
+                          role="group"
+                          aria-label="그림 비율"
+                        >
+                          <button
+                            type="button"
+                            aria-pressed={design.imageAspectLocked !== false}
+                            onClick={() => patch({ imageAspectLocked: true })}
+                          >
+                            비율 고정
+                          </button>
+                          <button
+                            type="button"
+                            aria-pressed={design.imageAspectLocked === false}
+                            disabled={!image}
+                            onClick={() =>
+                              patch({
+                                imageAspectLocked: false,
+                                imageStretch: true,
+                                ...(!design.imageStretch && image
+                                  ? {
+                                      imageBox: fitStickerImageBox(
+                                        design.imageBox,
+                                        image.naturalWidth,
+                                        image.naturalHeight,
+                                        design.shape,
+                                      ),
+                                    }
+                                  : {}),
+                              })
+                            }
+                          >
+                            자유
+                          </button>
+                        </div>
+                        <button
+                          className="text-button"
+                          onClick={() =>
+                            patch({ assetId: undefined, image: undefined })
+                          }
+                        >
+                          사진 제거
+                        </button>
+                      </>
+                    )}
+                </fieldset>
+              </section>
+            )}
           </div>
-          <ArtworkGrid
-            assets={visible}
-            selected={design.assetId}
-            working={working}
-            onSelect={selectArtwork}
-          />
-          {!visible.length && (
-            <p className="sticker-empty">
-              {assets.length
-                ? "선택한 조건의 그림이 없습니다."
-                : "등록된 그림이 없습니다."}
-            </p>
-          )}
-          {!assets.length && (
+        </>
+      )}
+      {tab === "stickers" && !editorActive && (
+        <section className="sticker-collection">
+          <header className="sticker-section-heading">
+            <h2>저장한 스티커</h2>
             <button
               className="button secondary"
+              disabled={working}
               onClick={() => {
-                setPickerOpen(false);
-                setTab("library");
-                setAsset({ id: uid(), name: "", image: "", tags: [] });
-                setTag("");
+                if (loadDesign(orderFromTemplate(templates[0], uid())))
+                  setTemplateId(templates[0].id);
               }}
             >
-              그림 등록
+              <Plus size={16} />새 스티커
             </button>
+          </header>
+          {orders.length ? (
+            <div className="sticker-order-list">
+              {orders.map((d) => (
+                <button
+                  key={d.id}
+                  disabled={working}
+                  onClick={() => {
+                    if (loadDesign(d, true)) setTemplateId("");
+                  }}
+                >
+                  <span>
+                    <strong>{d.name}</strong>
+                    <small>
+                      {expiryFormat.format(stickerExpiresAt(d, state))} 삭제
+                      예정
+                    </small>
+                  </span>
+                  <ArrowRight size={17} />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="sticker-empty">저장한 스티커가 없습니다.</p>
           )}
-        </dialog>
+        </section>
       )}
     </div>
   );

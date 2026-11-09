@@ -1,7 +1,12 @@
 import { addDays, today, uid } from "./dates";
 import { commandSchema, type Command, type StoreState } from "./types";
 import { materialUsage, orderPieces, requirements } from "./calculations";
-import { pruneStickerWork } from "./stickers";
+import {
+  isOrderSticker,
+  MAX_STICKER_DAYS,
+  pruneStickerWork,
+  stickerExpiresAt,
+} from "./stickers";
 
 export function emptyState(): StoreState {
   return {
@@ -254,7 +259,7 @@ export function applyCommand(
   let message = "";
   switch (c.type) {
     case "cleanupStickerWork": {
-      message = "30일 지난 스티커 작업 정리";
+      message = "보관 기간이 지난 주문용 스티커 정리";
       break;
     }
     case "deleteStickerAsset": {
@@ -288,6 +293,26 @@ export function applyCommand(
         throw new Error("주문을 찾을 수 없습니다.");
       const designs = (s.stickerDesigns ||= []);
       const index = designs.findIndex((d) => d.id === c.design.id);
+      const previous = designs[index];
+      if (previous && isOrderSticker(previous) !== isOrderSticker(design))
+        throw new Error("다른 종류의 디자인은 새 작업으로 저장해 주세요.");
+      if (isOrderSticker(design)) {
+        if (
+          !previous &&
+          (c.design.createdAt ||
+            c.design.updatedAt ||
+            input.stickerDesigns?.some((d) => d.id === design.id))
+        )
+          throw new Error(
+            "보관 기간이 끝난 주문 작업입니다. 템플릿에서 새로 만들어 주세요.",
+          );
+        design.createdAt = previous?.createdAt || now;
+        design.retentionDays ??= previous?.retentionDays ?? MAX_STICKER_DAYS;
+        if (stickerExpiresAt(design, s) <= Date.parse(now))
+          throw new Error(
+            "이미 지난 보관 기간입니다. 더 긴 기간을 선택해 주세요.",
+          );
+      }
       if (index < 0) designs.push(design);
       else designs[index] = design;
       message = "스티커 디자인 저장";

@@ -4,13 +4,16 @@ import { commandSchema } from "@/lib/types";
 import { applyCommand } from "@/lib/state";
 import { findMenuPhoto } from "@/lib/menu-catalog";
 import { menuImageBelongsToShop } from "@/lib/menu-image";
+import { pruneStickerWork, isStickerSampleImage } from "@/lib/stickers";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const ctx = await context(req);
+    const current = await readDocument(ctx);
     return Response.json(
       {
-        ...(await readDocument(ctx)),
+        ...current,
+        document: pruneStickerWork(current.document),
         shopId: ctx.shopId,
         user: ctx.user.email,
       },
@@ -37,7 +40,13 @@ export async function POST(req: Request) {
       .eq("actor", ctx.user.id)
       .eq("request_id", body.requestId)
       .maybeSingle();
-    if (prior) return Response.json(await readDocument(ctx));
+    if (prior) {
+      const current = await readDocument(ctx);
+      return Response.json({
+        ...current,
+        document: pruneStickerWork(current.document),
+      });
+    }
     const current = await readDocument(ctx);
     if (current.version !== body.version)
       throw new HttpError(
@@ -57,6 +66,7 @@ export async function POST(req: Request) {
     if (
       body.command.type === "saveStickerDesign" &&
       body.command.design.image &&
+      !isStickerSampleImage(body.command.design.image) &&
       !menuImageBelongsToShop(body.command.design.image, ctx.shopId)
     )
       throw new HttpError("해당 매장의 스티커 그림이 아닙니다.", 403);
@@ -91,7 +101,10 @@ export async function POST(req: Request) {
         );
       throw new HttpError("저장하지 못했습니다. 다시 시도하세요.", 500);
     }
-    return Response.json(data, { headers: { "Cache-Control": "no-store" } });
+    return Response.json(
+      { ...data, document: pruneStickerWork(data.document) },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (e) {
     return errorResponse(e);
   }

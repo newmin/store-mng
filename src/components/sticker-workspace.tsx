@@ -907,15 +907,14 @@ export function StickerWorkspace({
                           <Icon size={19} />
                         </button>
                       ))}
-                    </div>
-                    <label>
-                      글자 색
                       <input
                         type="color"
+                        aria-label="글자 색"
+                        title="글자 색"
                         value={design.color}
                         onChange={(e) => patch({ color: e.target.value })}
                       />
-                    </label>
+                    </div>
                   </>
                 )}
                 {selected === "imageBox" && design.assetId && (

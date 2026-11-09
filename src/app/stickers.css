@@ -250,6 +250,15 @@
   font-size: 17px;
   margin-right: 8px;
 }
+.sticker-text-tools input[type="color"] {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 4px;
+  margin-left: 4px;
+  border-radius: 7px;
+}
 .sticker-aspect {
   grid-column: 1 / -1;
 }

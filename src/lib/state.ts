@@ -1,6 +1,7 @@
 import { addDays, today, uid } from "./dates";
 import { commandSchema, type Command, type StoreState } from "./types";
 import { materialUsage, orderPieces, requirements } from "./calculations";
+import { pruneStickerWork } from "./stickers";
 
 export function emptyState(): StoreState {
   return {
@@ -240,7 +241,7 @@ export function applyCommand(
   now = new Date().toISOString(),
 ): StoreState {
   const c = commandSchema.parse(raw),
-    s = structuredClone(input),
+    s = structuredClone(pruneStickerWork(input, now)),
     day = today();
   const findProduct = (id: string) => {
     const p = s.products.find((p) => p.id === id);
@@ -252,6 +253,22 @@ export function applyCommand(
   };
   let message = "";
   switch (c.type) {
+    case "cleanupStickerWork": {
+      message = "30일 지난 스티커 작업 정리";
+      break;
+    }
+    case "deleteStickerAsset": {
+      const asset = s.stickerAssets?.find((a) => a.id === c.id);
+      if (!asset) throw new Error("이미 삭제된 그림입니다.");
+      s.stickerDesigns = s.stickerDesigns?.map((d) =>
+        d.assetId === c.id
+          ? { ...d, assetId: undefined, image: d.image || asset.image }
+          : d,
+      );
+      s.stickerAssets = s.stickerAssets!.filter((a) => a.id !== c.id);
+      message = "스티커 그림 삭제";
+      break;
+    }
     case "saveStickerAsset": {
       const assets = (s.stickerAssets ||= []);
       const index = assets.findIndex((a) => a.id === c.asset.id);
@@ -261,6 +278,7 @@ export function applyCommand(
       break;
     }
     case "saveStickerDesign": {
+      const design = { ...c.design, updatedAt: now };
       if (
         c.design.assetId &&
         !s.stickerAssets?.some((a) => a.id === c.design.assetId)
@@ -270,8 +288,8 @@ export function applyCommand(
         throw new Error("주문을 찾을 수 없습니다.");
       const designs = (s.stickerDesigns ||= []);
       const index = designs.findIndex((d) => d.id === c.design.id);
-      if (index < 0) designs.push(c.design);
-      else designs[index] = c.design;
+      if (index < 0) designs.push(design);
+      else designs[index] = design;
       message = "스티커 디자인 저장";
       break;
     }

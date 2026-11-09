@@ -155,6 +155,8 @@ export type StoreState = {
   audit: Audit[];
 };
 export const commandSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("deleteStickerAsset"), id }),
+  z.object({ type: z.literal("cleanupStickerWork") }),
   z.object({ type: z.literal("saveStickerAsset"), asset: stickerAssetSchema }),
   z.object({
     type: z.literal("saveStickerDesign"),

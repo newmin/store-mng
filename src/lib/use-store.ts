@@ -4,6 +4,7 @@ import { authFetch, sharedMode, supabase } from "./client";
 import { applyCommand } from "./state";
 import { uid } from "./dates";
 import { initializeDemoState } from "./demo-data";
+import { expiredStickerIds, pruneStickerWork } from "./stickers";
 import type { Command, StoreState } from "./types";
 const LOCAL_KEY = "tteokdam-demo-v1";
 export function useStore() {
@@ -19,7 +20,28 @@ export function useStore() {
   const refresh = useCallback(async () => {
     if (!sharedMode) return;
     try {
-      const result = await authFetch("/api/store");
+      let result = await authFetch("/api/store");
+      if (expiredStickerIds(result.document).length) {
+        try {
+          result = {
+            ...result,
+            ...(await authFetch("/api/store", {
+              method: "POST",
+              body: JSON.stringify({
+                version: result.version,
+                requestId: uid(),
+                command: { type: "cleanupStickerWork" },
+              }),
+            })),
+          };
+        } catch {
+          // A concurrent save may win the version check; keep the shop usable and retry on the next refresh.
+          result = await authFetch("/api/store");
+          setError(
+            "만료된 스티커 작업을 정리하지 못했습니다. 다음 새로고침에서 다시 시도합니다.",
+          );
+        }
+      }
       setState(result.document);
       setVersion(result.version);
       setUser(result.user || "");
@@ -31,8 +53,8 @@ export function useStore() {
     if (!supabase) {
       try {
         const cached = localStorage.getItem(LOCAL_KEY);
-        const next = initializeDemoState(
-          cached ? JSON.parse(cached) : undefined,
+        const next = pruneStickerWork(
+          initializeDemoState(cached ? JSON.parse(cached) : undefined),
         );
         localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
         setState(next);

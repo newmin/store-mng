@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isUploadedMenuImage } from "./menu-image";
+import type { StoreState } from "./types";
 
 const key = z.string().min(1).max(100);
 export function collectStickerTags(
@@ -20,7 +21,7 @@ export function collectStickerTags(
 }
 export const stickerAssetSchema = z.object({
   id: key,
-  name: z.string().trim().min(1).max(80),
+  name: z.string().trim().max(80).default(""),
   image: z
     .string()
     .max(200)
@@ -46,6 +47,8 @@ export const stickerDesignSchema = z.object({
   id: key,
   name: z.string().trim().min(1).max(80),
   orderId: key.optional(),
+  kind: z.enum(["template", "order"]).optional(),
+  updatedAt: z.string().datetime().optional(),
   assetId: key.optional(),
   image: z.string().max(200).refine(isUploadedMenuImage).optional(),
   text: z.string().max(2000),
@@ -63,6 +66,35 @@ export const stickerDesignSchema = z.object({
 export type StickerAsset = z.infer<typeof stickerAssetSchema>;
 export type StickerDesign = z.infer<typeof stickerDesignSchema>;
 export type StickerBox = StickerDesign["imageBox"];
+export function isOrderSticker(design: StickerDesign) {
+  return design.kind === "order" || (!design.kind && !!design.orderId);
+}
+export function expiredStickerIds(
+  state: StoreState,
+  now = new Date().toISOString(),
+) {
+  const cutoff = Date.parse(now) - 30 * 24 * 60 * 60 * 1000;
+  return (state.stickerDesigns || [])
+    .filter((d) => {
+      if (!isOrderSticker(d)) return false;
+      const saved =
+        d.updatedAt || state.orders.find((o) => o.id === d.orderId)?.updatedAt;
+      return !!saved && Date.parse(saved) <= cutoff;
+    })
+    .map((d) => d.id);
+}
+export function pruneStickerWork(
+  state: StoreState,
+  now = new Date().toISOString(),
+): StoreState {
+  const expired = new Set(expiredStickerIds(state, now));
+  return expired.size
+    ? {
+        ...state,
+        stickerDesigns: state.stickerDesigns!.filter((d) => !expired.has(d.id)),
+      }
+    : state;
+}
 export const stickerFonts = {
   sans: '"Noto Sans KR", "Malgun Gothic", sans-serif',
   serif: '"Batang", "Noto Serif KR", serif',

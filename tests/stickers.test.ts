@@ -9,6 +9,8 @@ import {
   collectStickerTags,
   resizeStickerBox,
   fitStickerImageBox,
+  expiredStickerIds,
+  pruneStickerWork,
 } from "../src/lib/stickers";
 
 const asset = {
@@ -18,6 +20,98 @@ const asset = {
   image: "demo-menu:11111111-1111-4111-8111-111111111111",
 };
 describe("sticker library and drafts", () => {
+  it("deletes a library component while preserving images in both current and legacy templates", () => {
+    let s = applyCommand(
+      demoState(),
+      { type: "saveStickerAsset", asset },
+      "test",
+    );
+    const originalOrders = structuredClone(s.orders);
+    s.stickerDesigns = [
+      { ...newStickerDesign("legacy"), assetId: asset.id },
+      {
+        ...newStickerDesign("snapshot"),
+        assetId: asset.id,
+        image: asset.image,
+      },
+    ];
+    s = applyCommand(s, { type: "deleteStickerAsset", id: asset.id }, "test");
+    expect(s.stickerAssets).toEqual([]);
+    expect(s.stickerDesigns).toHaveLength(2);
+    for (const d of s.stickerDesigns!) {
+      expect(d.assetId).toBeUndefined();
+      expect(d.image).toBe(asset.image);
+    }
+    expect(s.orders).toEqual(originalOrders);
+    expect(() =>
+      applyCommand(
+        s,
+        { type: "saveStickerDesign", design: s.stickerDesigns![0] },
+        "test",
+      ),
+    ).not.toThrow();
+    expect(() =>
+      applyCommand(s, { type: "deleteStickerAsset", id: asset.id }, "test"),
+    ).toThrow();
+    expect(
+      stickerAssetSchema.parse({ id: asset.id, image: asset.image, tags: [] })
+        .name,
+    ).toBe("");
+  });
+  it("expires only order work after 30 days and takes save timestamps from the server", () => {
+    const now = "2026-12-01T12:00:00.000Z";
+    let s = demoState();
+    s.stickerDesigns = [
+      {
+        ...newStickerDesign("template"),
+        kind: "template",
+        orderId: s.orders[0].id,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        ...newStickerDesign("expired"),
+        kind: "order",
+        updatedAt: "2026-11-01T12:00:00.000Z",
+      },
+      {
+        ...newStickerDesign("recent"),
+        kind: "order",
+        updatedAt: "2026-11-01T12:00:00.001Z",
+      },
+      { ...newStickerDesign("legacy"), orderId: s.orders[0].id },
+    ];
+    s.orders[0].updatedAt = "2026-10-01T00:00:00.000Z";
+    expect(expiredStickerIds(s, now)).toEqual(["expired", "legacy"]);
+    expect(pruneStickerWork(s, now).stickerDesigns!.map((d) => d.id)).toEqual([
+      "template",
+      "recent",
+    ]);
+    const cleaned = applyCommand(
+      s,
+      { type: "cleanupStickerWork" },
+      "test",
+      now,
+    );
+    expect(cleaned.stickerDesigns!.map((d) => d.id)).toEqual([
+      "template",
+      "recent",
+    ]);
+    expect(cleaned.orders).toEqual(s.orders);
+    expect(cleaned.revision).toBe(s.revision);
+    const refreshed = applyCommand(
+      cleaned,
+      {
+        type: "saveStickerDesign",
+        design: {
+          ...cleaned.stickerDesigns![1],
+          updatedAt: "2020-01-01T00:00:00.000Z",
+        },
+      },
+      "test",
+      now,
+    );
+    expect(refreshed.stickerDesigns![1].updatedAt).toBe(now);
+  });
   it("preserves old aspect settings and persists free image distortion", () => {
     const initial = applyCommand(
       demoState(),
@@ -41,7 +135,7 @@ describe("sticker library and drafts", () => {
       { type: "saveStickerDesign", design },
       "test",
     );
-    expect(saved.stickerDesigns![0]).toEqual(design);
+    expect(saved.stickerDesigns![0]).toMatchObject(design);
     expect(
       stickerDesignSchema.safeParse({
         ...design,
@@ -150,7 +244,7 @@ describe("sticker library and drafts", () => {
       },
       "test",
     );
-    expect(saved.stickerDesigns![0]).toEqual(design);
+    expect(saved.stickerDesigns![0]).toMatchObject(design);
     saved = applyCommand(
       saved,
       { type: "saveStickerDesign", design: { ...design, fontSize: 55 } },

@@ -19,6 +19,7 @@ import {
   stickerBox,
   resizeStickerBox,
   fitStickerImageBox,
+  isOrderSticker,
   stickerMatches,
   type StickerAsset,
   type StickerDesign,
@@ -82,7 +83,6 @@ export function StickerWorkspace({
   onEditing: (dirty: boolean) => void;
 }) {
   const [tab, setTab] = useState<"library" | "studio">("library");
-  const [showArchived, setShowArchived] = useState(false);
   const [filters, setFilters] = useState<string[]>([]),
     [query, setQuery] = useState("");
   const [asset, setAsset] = useState<StickerAsset | null>(null),
@@ -113,14 +113,9 @@ export function StickerWorkspace({
   const assets = state.stickerAssets || [];
   const artwork = assets.find((a) => a.id === design.assetId);
   const { image, error } = useArtwork(design.image || artwork?.image);
-  const tags = [
-    ...new Set(assets.filter((a) => !a.archived).flatMap((a) => a.tags)),
-  ].sort();
+  const tags = [...new Set(assets.flatMap((a) => a.tags))].sort();
   const visible = assets.filter((a) =>
-    showArchived && tab === "library"
-      ? !!a.archived &&
-        stickerMatches({ ...a, archived: false }, filters, query)
-      : stickerMatches(a, filters, query),
+    stickerMatches({ ...a, archived: false }, filters, query),
   );
   useEffect(() => {
     onEditing(dirty || !!asset);
@@ -368,19 +363,6 @@ export function StickerWorkspace({
         </button>
       </div>
       <div className="sticker-filters">
-        {tab === "library" && (
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={showArchived}
-              onChange={(e) => {
-                setShowArchived(e.target.checked);
-                setFilters([]);
-              }}
-            />
-            보관한 그림
-          </label>
-        )}
         <input
           aria-label="스티커 그림 검색"
           placeholder="그림 검색"
@@ -432,17 +414,6 @@ export function StickerWorkspace({
             >
               <fieldset disabled={working}>
                 <label>
-                  그림 이름
-                  <input
-                    required
-                    maxLength={80}
-                    value={asset.name}
-                    onChange={(e) =>
-                      setAsset({ ...asset, name: e.target.value })
-                    }
-                  />
-                </label>
-                <label>
                   이미지
                   <input
                     type="file"
@@ -458,8 +429,6 @@ export function StickerWorkspace({
                             ? {
                                 ...a,
                                 image: path,
-                                name:
-                                  a.name || file.name.replace(/\.[^.]+$/, ""),
                               }
                             : a,
                         );
@@ -706,7 +675,7 @@ export function StickerWorkspace({
               <summary>디자인 정보</summary>
               <fieldset disabled={working}>
                 <label>
-                  저장한 디자인
+                  저장한 템플릿 · 주문 작업
                   <select
                     aria-label="저장한 디자인"
                     value={
@@ -728,6 +697,7 @@ export function StickerWorkspace({
                     <option value="">선택</option>
                     {state.stickerDesigns?.map((d) => (
                       <option value={d.id} key={d.id}>
+                        {isOrderSticker(d) ? "[주문] " : "[템플릿] "}
                         {d.name}
                       </option>
                     ))}
@@ -745,6 +715,19 @@ export function StickerWorkspace({
                 >
                   <Plus size={15} />새 디자인
                 </button>
+                <label>
+                  저장 구분
+                  <select
+                    aria-label="저장 구분"
+                    value={isOrderSticker(design) ? "order" : "template"}
+                    onChange={(e) =>
+                      patch({ kind: e.target.value as "order" | "template" })
+                    }
+                  >
+                    <option value="template">재사용 템플릿</option>
+                    <option value="order">주문 작업 · 30일 보관</option>
+                  </select>
+                </label>
                 <label>
                   디자인 이름
                   <input
@@ -770,6 +753,7 @@ export function StickerWorkspace({
                         return;
                       patch({
                         orderId: order?.id,
+                        kind: order ? "order" : "template",
                         text: order?.sticker || design.text,
                       });
                     }}
@@ -917,54 +901,55 @@ export function StickerWorkspace({
                     </div>
                   </>
                 )}
-                {selected === "imageBox" && design.assetId && (
-                  <>
-                    <div
-                      className="sticker-tabs sticker-aspect"
-                      role="group"
-                      aria-label="그림 비율"
-                    >
-                      <button
-                        type="button"
-                        aria-pressed={design.imageAspectLocked !== false}
-                        onClick={() => patch({ imageAspectLocked: true })}
+                {selected === "imageBox" &&
+                  (design.assetId || design.image) && (
+                    <>
+                      <div
+                        className="sticker-tabs sticker-aspect"
+                        role="group"
+                        aria-label="그림 비율"
                       >
-                        비율 고정
-                      </button>
+                        <button
+                          type="button"
+                          aria-pressed={design.imageAspectLocked !== false}
+                          onClick={() => patch({ imageAspectLocked: true })}
+                        >
+                          비율 고정
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={design.imageAspectLocked === false}
+                          disabled={!image}
+                          onClick={() =>
+                            patch({
+                              imageAspectLocked: false,
+                              imageStretch: true,
+                              ...(!design.imageStretch && image
+                                ? {
+                                    imageBox: fitStickerImageBox(
+                                      design.imageBox,
+                                      image.naturalWidth,
+                                      image.naturalHeight,
+                                      design.shape,
+                                    ),
+                                  }
+                                : {}),
+                            })
+                          }
+                        >
+                          자유
+                        </button>
+                      </div>
                       <button
-                        type="button"
-                        aria-pressed={design.imageAspectLocked === false}
-                        disabled={!image}
+                        className="text-button"
                         onClick={() =>
-                          patch({
-                            imageAspectLocked: false,
-                            imageStretch: true,
-                            ...(!design.imageStretch && image
-                              ? {
-                                  imageBox: fitStickerImageBox(
-                                    design.imageBox,
-                                    image.naturalWidth,
-                                    image.naturalHeight,
-                                    design.shape,
-                                  ),
-                                }
-                              : {}),
-                          })
+                          patch({ assetId: undefined, image: undefined })
                         }
                       >
-                        자유
+                        그림 빼기
                       </button>
-                    </div>
-                    <button
-                      className="text-button"
-                      onClick={() =>
-                        patch({ assetId: undefined, image: undefined })
-                      }
-                    >
-                      그림 빼기
-                    </button>
-                  </>
-                )}
+                    </>
+                  )}
               </fieldset>
             </section>
           )}
@@ -978,8 +963,8 @@ export function StickerWorkspace({
           >
             <button
               className="sticker-art-select"
-              disabled={working || !!a.archived}
-              aria-label={`${a.name} 그림 선택`}
+              disabled={working}
+              aria-label={a.name ? `${a.name} 그림 선택` : "그림 선택"}
               onClick={() => {
                 patch({
                   assetId: a.id,
@@ -999,7 +984,6 @@ export function StickerWorkspace({
               }}
             >
               <Artwork asset={a} />
-              <b>{a.name}</b>
             </button>
             <div className="sticker-chips">
               {a.tags.map((t) => (
@@ -1026,18 +1010,21 @@ export function StickerWorkspace({
                   onClick={async () => {
                     if (
                       !confirm(
-                        a.archived
-                          ? `${a.name} 그림을 복원할까요?`
-                          : `${a.name} 그림을 보관할까요? 저장한 디자인에서는 유지됩니다.`,
+                        "이 그림을 삭제할까요? 저장한 템플릿과 주문 작업의 그림은 유지됩니다.",
                       )
                     )
                       return;
                     setWorking(true);
                     try {
-                      await run({
-                        type: "saveStickerAsset",
-                        asset: { ...a, archived: !a.archived },
-                      });
+                      await run({ type: "deleteStickerAsset", id: a.id });
+                      if (asset?.id === a.id) setAsset(null);
+                      if (design.assetId === a.id)
+                        setDesign((d) => ({
+                          ...d,
+                          assetId: undefined,
+                          image: d.image || a.image,
+                        }));
+                      setSuccess("그림을 삭제했습니다.");
                     } catch (e) {
                       setNotice((e as Error).message);
                     } finally {
@@ -1045,7 +1032,7 @@ export function StickerWorkspace({
                     }
                   }}
                 >
-                  {a.archived ? "복원" : "보관"}
+                  삭제
                 </button>
               </div>
             )}
@@ -1054,7 +1041,7 @@ export function StickerWorkspace({
       </div>
       {!visible.length && (
         <p className="sticker-empty">
-          {assets.some((a) => !a.archived)
+          {assets.length
             ? "선택한 조건의 그림이 없습니다."
             : "재사용할 스티커 그림을 등록해 주세요."}
         </p>

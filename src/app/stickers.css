@@ -13,11 +13,11 @@
 .sticker-tabs button,
 .sticker-chips button,
 .sticker-chips span {
-  border: 1px solid #ded9cc;
+  border: 1px solid var(--color-border);
   border-radius: 20px;
   padding: 7px 12px;
-  background: #fffdf7;
-  color: #6e6658;
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
   font-size: 12px;
   display: inline-flex;
   align-items: center;
@@ -29,13 +29,63 @@
 }
 .sticker-tabs button[aria-pressed="true"],
 .sticker-chips button[aria-pressed="true"] {
-  background: #f3e6cf;
-  border-color: #b38e5c;
-  color: #674820;
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
 }
 .sticker-filters {
   display: grid;
   gap: 12px;
+}
+.sticker-template-loader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 18px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+.sticker-template-loader label {
+  margin: 0;
+}
+.sticker-recent-work {
+  grid-column: 1 / -1;
+}
+.sticker-recent-work summary {
+  cursor: pointer;
+  padding: 6px 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.sticker-image-picker {
+  width: min(760px, calc(100vw - 24px));
+  max-height: 80dvh;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 20px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.sticker-image-picker[open] {
+  display: grid;
+  gap: 16px;
+}
+.sticker-image-picker::backdrop {
+  background: color-mix(in srgb, var(--color-overlay) 36.08%, transparent);
+}
+.sticker-image-picker > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: -20px;
+  background: var(--color-surface);
+  z-index: 1;
+}
+.sticker-image-picker h2 {
+  font-size: 16px;
 }
 .sticker-filters > input {
   max-width: 360px;
@@ -43,8 +93,8 @@
 .sticker-asset-form,
 .sticker-controls {
   padding: 20px;
-  background: #fffdf8;
-  border: 1px solid var(--border);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
 }
 .sticker-asset-form {
@@ -73,16 +123,16 @@
 }
 .sticker-art-card {
   padding: 12px;
-  background: white;
-  border: 1px solid var(--border);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   display: grid;
   gap: 12px;
   align-content: start;
 }
 .sticker-art-card.selected {
-  border-color: #b38e5c;
-  box-shadow: 0 0 0 1px #b38e5c;
+  border-color: var(--color-border-strong);
+  box-shadow: 0 0 0 1px var(--color-shadow);
 }
 .sticker-art-select {
   border: 0;
@@ -97,8 +147,11 @@
   width: 100%;
   height: 130px;
   object-fit: contain;
-  background: repeating-conic-gradient(#f1f1ed 0% 25%, white 0% 50%) 50% / 16px
-    16px;
+  background: repeating-conic-gradient(
+      var(--color-checker) 0% 25%,
+      var(--color-image-paper) 0% 50%
+    )
+    50% / 16px 16px;
 }
 .sticker-art-select b {
   overflow-wrap: anywhere;
@@ -127,8 +180,8 @@
   max-height: 48dvh;
   scroll-margin-top: 70px;
   height: auto;
-  background: white;
-  border: 1px solid #d3cbbb;
+  background: var(--color-image-paper);
+  border: 1px solid var(--color-border-strong);
   border-radius: 8px;
   touch-action: none;
   cursor: move;
@@ -155,10 +208,11 @@
 .sticker-resize-handle span {
   width: 16px;
   height: 16px;
-  background: #a17c45;
-  border: 2px solid white;
+  background: var(--color-primary);
+  border: 2px solid var(--color-border);
   border-radius: 50%;
-  box-shadow: 0 1px 5px #30241650;
+  box-shadow: 0 1px 5px
+    color-mix(in srgb, var(--color-shadow) 31.37%, transparent);
 }
 .sticker-document summary {
   cursor: pointer;
@@ -182,8 +236,9 @@
   max-height: 38dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
-  box-shadow: 0 8px 35px #30241635;
-  border-color: #cfb994;
+  box-shadow: 0 8px 35px
+    color-mix(in srgb, var(--color-shadow) 20.78%, transparent);
+  border-color: var(--color-border-strong);
   animation: sticker-panel-enter 180ms ease-out;
 }
 .sticker-adjustment > header {
@@ -200,7 +255,7 @@
   width: 32px;
   height: 32px;
   min-height: 32px;
-  background: #fffdf8;
+  background: var(--color-surface);
   border-radius: 50%;
 }
 .sticker-adjustment fieldset > :first-child {
@@ -235,15 +290,15 @@
   width: 40px;
   height: 40px;
   padding: 0;
-  border: 1px solid #ded9cc;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: #fffdf7;
-  color: #6e6658;
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
 }
 .sticker-text-tools button[aria-pressed="true"] {
-  color: #674820;
-  background: #f3e6cf;
-  border-color: #b38e5c;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
 }
 .sticker-text-tools .sticker-bold {
   font-weight: 800;
@@ -280,7 +335,7 @@
 .sticker-controls input[type="range"] {
   padding: 0;
   min-height: 30px;
-  accent-color: #a17c45;
+  accent-color: var(--color-text-secondary);
 }
 .sticker-controls label {
   font-size: 12px;
@@ -296,7 +351,7 @@
 .sticker-empty {
   padding: 36px 16px;
   text-align: center;
-  color: var(--muted);
+  color: var(--color-text-muted);
 }
 @media (max-width: 800px) {
   .sticker-studio {

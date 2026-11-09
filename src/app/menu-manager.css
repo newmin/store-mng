@@ -9,14 +9,14 @@
 }
 .menu-count {
   font-size: 12px;
-  color: #a28a69;
+  color: var(--color-text-muted);
   font-weight: 400;
 }
 .menu-manager-tools {
   padding: 18px 24px;
   display: grid;
   gap: 14px;
-  border-bottom: 1px solid #eee6da;
+  border-bottom: 1px solid var(--color-border);
 }
 .menu-search {
   display: flex;
@@ -24,11 +24,11 @@
   align-items: center;
   gap: 10px;
   padding: 0 12px;
-  border: 1px solid #e5dac8;
+  border: 1px solid var(--color-border);
   border-radius: 9px;
-  background: #fffdf8;
+  background: var(--color-surface);
   margin: 0;
-  color: #a28a69;
+  color: var(--color-text-muted);
 }
 .menu-search input {
   border: 0;
@@ -36,7 +36,7 @@
   padding-left: 0;
 }
 .menu-search:focus-within {
-  outline: 2px solid #c8aa7b;
+  outline: 2px solid var(--color-focus);
 }
 .menu-search input:focus {
   outline: 0;
@@ -49,16 +49,16 @@
 .menu-manager-categories button {
   padding: 7px 16px;
   min-height: 40px;
-  border: 1px solid #e9dfcd;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #fffdf8;
-  color: #947a56;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
   font-size: 12px;
 }
 .menu-manager-categories button[aria-pressed="true"] {
-  background: #895f36;
-  border-color: #895f36;
-  color: #fff;
+  background: var(--color-primary);
+  border-color: var(--color-primary-border);
+  color: var(--color-on-primary);
 }
 .menu-manager-status {
   display: flex;
@@ -73,7 +73,7 @@
   gap: 10px;
   margin: 0;
   font-size: 12px;
-  color: #927c5f;
+  color: var(--color-text-secondary);
 }
 .menu-manager-status select {
   width: auto;
@@ -81,7 +81,7 @@
 }
 .menu-manager-status > span {
   font-size: 12px;
-  color: #a08c70;
+  color: var(--color-text-muted);
 }
 .menu-manager-list {
   padding: 0 16px;
@@ -91,7 +91,7 @@
   grid-template-columns: minmax(0, 1fr) 155px 58px 36px;
   gap: 14px;
   align-items: center;
-  border-bottom: 1px solid #eee7dc;
+  border-bottom: 1px solid var(--color-border);
   padding: 10px 0;
 }
 .menu-manager-row:last-child {
@@ -118,38 +118,38 @@
 }
 .menu-manager-name b {
   font-size: 14px;
-  color: #715438;
+  color: var(--color-text-secondary);
   overflow-wrap: anywhere;
 }
 .menu-manager-name small {
   font-size: 11px;
-  color: #a08b6f;
+  color: var(--color-text-muted);
 }
 .menu-manager-production {
   font-size: 12px;
-  color: #806445;
+  color: var(--color-text-secondary);
 }
 .menu-manager-production small {
   font-size: 11px;
-  color: #a08b6f;
+  color: var(--color-text-muted);
 }
 .menu-setup-link {
-  border: 1px solid #ead7b8;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: #fff7e8;
-  color: #a2763b;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
   padding: 6px 9px;
   font-size: 11px;
   min-height: 36px;
 }
 .menu-use-status {
-  color: #999084;
+  color: var(--color-text-muted);
   font-size: 10px;
   text-align: center;
   white-space: nowrap;
 }
 .menu-use-status.is-active {
-  color: #607b55;
+  color: var(--color-primary);
 }
 .menu-manager-row.is-inactive .menu-manager-name {
   opacity: 0.6;
@@ -157,7 +157,7 @@
 .menu-manager-empty {
   padding: 36px 20px;
   text-align: center;
-  color: #a18c70;
+  color: var(--color-text-muted);
 }
 .menu-manager-empty .text-button {
   margin-top: 10px;
@@ -167,7 +167,7 @@
   gap: 6px;
   margin-bottom: 22px;
   padding: 4px;
-  background: #f6f1e7;
+  background: var(--color-surface-subtle);
   border-radius: 10px;
 }
 .product-editor-tabs button {
@@ -177,14 +177,15 @@
   padding: 10px 8px;
   min-height: 44px;
   background: transparent;
-  color: #a08a6c;
+  color: var(--color-text-muted);
   font-size: 13px;
   white-space: nowrap;
 }
 .product-editor-tabs button[aria-selected="true"] {
-  color: #80572f;
-  background: #fffdf8;
-  box-shadow: 0 1px 5px #67491f13;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  box-shadow: 0 1px 5px
+    color-mix(in srgb, var(--color-shadow) 7.45%, transparent);
   font-weight: 600;
 }
 .product-editor [role="tabpanel"][hidden] {
@@ -205,7 +206,7 @@
   flex-shrink: 0;
   overflow: hidden;
   border-radius: 12px;
-  background: #f5f0e6;
+  background: var(--color-surface-subtle);
 }
 .product-photo-preview .menu-thumbnail,
 .product-photo-preview > img {
@@ -217,7 +218,7 @@
   display: grid;
   place-items: center;
   height: 100%;
-  color: #a18b6b;
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 .product-photo-actions {
@@ -239,7 +240,7 @@
   cursor: pointer;
 }
 .product-photo-select:focus-within {
-  outline: 3px solid #d2b779;
+  outline: 3px solid var(--color-focus);
   outline-offset: 3px;
 }
 .product-appearance {
@@ -248,7 +249,7 @@
 .product-appearance > summary {
   cursor: pointer;
   font-size: 12px;
-  color: #937c59;
+  color: var(--color-text-secondary);
   padding: 10px 0;
 }
 .product-appearance > label {
@@ -257,13 +258,13 @@
 .recipe-copy {
   padding: 12px 14px;
   margin-bottom: 20px;
-  border: 1px solid #eadcc6;
+  border: 1px solid var(--color-border);
   border-radius: 9px;
-  background: #fffcf5;
+  background: var(--color-surface-raised);
 }
 .recipe-copy > summary {
   cursor: pointer;
-  color: #98754a;
+  color: var(--color-text-secondary);
   font-size: 12px;
 }
 .recipe-copy > summary svg {
@@ -286,7 +287,7 @@
 }
 .recipe-copy-feedback {
   font-size: 12px;
-  color: #71835b;
+  color: var(--color-text-secondary);
   margin-bottom: 12px;
 }
 .product-recipe-list {
@@ -313,12 +314,12 @@
 }
 .product-recipe-amount span {
   font-size: 12px;
-  color: #a18b6b;
+  color: var(--color-text-muted);
 }
 .product-editor-footer {
   position: sticky;
   bottom: 0;
-  background: #fff;
+  background: var(--color-surface);
   padding: 12px 0;
   margin-top: 24px;
   z-index: 1;

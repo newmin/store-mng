@@ -256,7 +256,9 @@ export function drawSticker(
   ctx.restore();
   if (selected) {
     const r = box(design[selected]);
-    ctx.strokeStyle = "#aa804d";
+    ctx.strokeStyle = getComputedStyle(canvas)
+      .getPropertyValue("--color-primary")
+      .trim();
     ctx.lineWidth = 3;
     ctx.setLineDash([8, 5]);
     ctx.strokeRect(r.x, r.y, r.width, r.height);

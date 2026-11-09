@@ -326,9 +326,24 @@ function TimeDialog({
 }
 
 const fulfillmentChoices = [
-  { value: "pickup", name: "픽업", icon: ShoppingBag, color: "#c6a87d" },
-  { value: "quick", name: "퀵", icon: Bike, color: "#86a48c" },
-  { value: "delivery", name: "배달", icon: Truck, color: "#88a4c9" },
+  {
+    value: "pickup",
+    name: "픽업",
+    icon: ShoppingBag,
+    color: "var(--color-channel-pickup)",
+  },
+  {
+    value: "quick",
+    name: "퀵",
+    icon: Bike,
+    color: "var(--color-channel-quick)",
+  },
+  {
+    value: "delivery",
+    name: "배달",
+    icon: Truck,
+    color: "var(--color-channel-delivery)",
+  },
 ] as const;
 export function FulfillmentPicker({
   value,

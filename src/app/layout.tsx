@@ -1,4 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import type { CSSProperties } from "react";
+import { themeVariables } from "@/lib/theme";
+import { brand } from "@/lib/brand";
 import "./globals.css";
 import "./order-pickers.css";
 import "./brand.css";
@@ -15,7 +18,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#895f36",
+  themeColor: brand.color,
 };
 export default function RootLayout({
   children,
@@ -23,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko">
+    <html lang="ko" style={themeVariables() as CSSProperties}>
       <body>{children}</body>
     </html>
   );

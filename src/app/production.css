@@ -4,8 +4,8 @@
 }
 .production-workbar {
   padding: 24px;
-  background: #fffcf5;
-  border-color: #e8dcc8;
+  background: var(--color-surface-raised);
+  border-color: var(--color-border);
 }
 .production-workbar-heading {
   display: flex;
@@ -23,13 +23,13 @@
 .production-status {
   padding: 4px 10px;
   border-radius: 20px;
-  color: #77664d;
-  background: #f0e7d7;
+  color: var(--color-text-secondary);
+  background: var(--color-primary-soft);
   font-size: 12px;
 }
 .production-status.needs-review {
-  color: #a55c26;
-  background: #fff0dc;
+  color: var(--color-warning);
+  background: var(--color-warning-surface);
 }
 .production-totals {
   display: grid;
@@ -37,15 +37,15 @@
   gap: 20px;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #eadfcd;
+  border-top: 1px solid var(--color-border);
 }
 .production-totals > span {
-  color: #8c7a61;
+  color: var(--color-text-secondary);
   font-size: 12px;
 }
 .production-totals b {
   display: block;
-  color: #76522f;
+  color: var(--color-text-secondary);
   font-size: 30px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
@@ -62,7 +62,7 @@
   gap: 8px;
   margin-top: 16px;
   font-size: 12px;
-  color: #91632f;
+  color: var(--color-text-secondary);
 }
 .production-feedback svg {
   flex-shrink: 0;
@@ -91,8 +91,8 @@
   font-size: 16px;
 }
 .production-menu {
-  background: #fff;
-  border: 1px solid #e9e0d3;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 13px;
   overflow: hidden;
 }
@@ -118,12 +118,12 @@
 }
 .production-menu-name > span {
   font-size: 12px;
-  color: #967b57;
+  color: var(--color-text-secondary);
 }
 .production-menu-quantity {
   flex-shrink: 0;
   font-size: 27px;
-  color: #78522e;
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 }
 .production-menu-quantity small {
@@ -133,17 +133,17 @@
   font-weight: 500;
 }
 .production-calculation {
-  border-top: 1px solid #f0eae1;
+  border-top: 1px solid var(--color-border);
   font-size: 12px;
 }
 .production-calculation summary {
   padding: 11px 20px;
   cursor: pointer;
-  color: #887052;
+  color: var(--color-text-secondary);
 }
 .production-calculation summary > span {
   margin-left: 12px;
-  color: #8d8a80;
+  color: var(--color-text-muted);
 }
 .production-calculation dl {
   display: grid;
@@ -158,7 +158,7 @@
   gap: 10px;
 }
 .production-calculation dt {
-  color: #8b8377;
+  color: var(--color-text-muted);
 }
 .production-calculation dd {
   margin: 0;
@@ -170,7 +170,7 @@
   align-items: center;
   gap: 10px;
   padding: 0 20px 14px;
-  color: #a26636;
+  color: var(--color-warning);
   font-size: 12px;
 }
 .production-missing {
@@ -179,7 +179,7 @@
   margin-top: 8px;
 }
 .production-missing > h3 {
-  color: #9b682f;
+  color: var(--color-text-secondary);
   font-size: 13px;
 }
 .production-materials .panel-heading {
@@ -203,7 +203,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 0;
-  border-bottom: 1px solid #f0eae1;
+  border-bottom: 1px solid var(--color-border);
   font-size: 13px;
 }
 .production-material-content dd {
@@ -214,12 +214,12 @@
 .production-material-content small {
   display: block;
   font-size: 11px;
-  color: #9a8c79;
+  color: var(--color-text-muted);
   font-weight: 400;
 }
 .production-material-content .material-short dd,
 .production-material-content .material-short dd small {
-  color: #bc6039;
+  color: var(--color-danger);
 }
 .production-shortage {
   display: flex;
@@ -228,7 +228,7 @@
   gap: 6px;
   padding: 12px 0;
   font-size: 12px;
-  color: #bc6039;
+  color: var(--color-danger);
 }
 .production-shortage .text-button {
   margin-left: auto;
@@ -236,19 +236,19 @@
 .production-empty {
   padding: 32px 20px;
   text-align: center;
-  color: #a18b6a;
+  color: var(--color-text-muted);
 }
 .production-empty h3 {
   margin: 12px 0 18px;
 }
 .production-completed .panel-heading > span {
   font-size: 12px;
-  color: #9d896a;
+  color: var(--color-text-muted);
 }
 .production-all > summary {
   padding: 17px 22px;
   font-size: 13px;
-  color: #8b7353;
+  color: var(--color-text-secondary);
   cursor: pointer;
 }
 .plan-editor-list {
@@ -257,10 +257,10 @@
   margin-bottom: 16px;
 }
 .plan-editor-item {
-  border: 1px solid #e8dfd0;
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 16px;
-  background: #fffdf8;
+  background: var(--color-surface);
 }
 .plan-editor-product {
   display: flex;
@@ -289,7 +289,7 @@
 .plan-editor-quantity > strong {
   padding-bottom: 8px;
   font-size: 22px;
-  color: #895f36;
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 .plan-batch-input {
@@ -309,12 +309,12 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid #eee6da;
+  border-bottom: 1px solid var(--color-border);
   font-size: 13px;
 }
 .plan-material-preview small {
   display: block;
-  color: #9a8c79;
+  color: var(--color-text-muted);
   font-size: 11px;
   font-weight: 400;
 }

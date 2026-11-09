@@ -8,7 +8,7 @@
   display: block;
   aspect-ratio: 1;
   background-repeat: no-repeat;
-  background-color: #f5f0e2;
+  background-color: var(--color-surface-subtle);
 }
 .menu-picker-card > .menu-thumbnail {
   aspect-ratio: 1;
@@ -18,7 +18,7 @@
   aspect-ratio: 1;
 }
 .menu-picker-price {
-  color: #927045;
+  color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 600;
   margin: -3px 0 10px;
@@ -35,18 +35,18 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  border: 1px solid #e9dfcb;
-  background: #fcf8ef;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
   border-radius: 7px;
   padding: 8px 10px;
   font-size: 11px;
-  color: #aa9575;
+  color: var(--color-text-muted);
   min-height: 36px;
 }
 .menu-category-tabs button[aria-pressed="true"] {
-  background: #8b633c;
-  border-color: #8b633c;
-  color: #fff;
+  background: var(--color-primary);
+  border-color: var(--color-primary-border);
+  color: var(--color-on-primary);
 }
 .menu-category-tabs button > span {
   font-size: 9px;
@@ -67,7 +67,7 @@
 .product-box-price {
   display: block;
   margin: 6px 0;
-  color: #916b3e;
+  color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 600;
 }
@@ -75,8 +75,8 @@
   display: inline-block !important;
   margin: 5px auto 2px;
   font-size: 9px;
-  color: #ac956d;
-  background: #f5ecd9;
+  color: var(--color-text-muted);
+  background: var(--color-surface-subtle);
   padding: 2px 7px;
   border-radius: 4px;
 }
@@ -85,10 +85,10 @@
 }
 .catalog-photo-options summary {
   padding: 11px 13px;
-  border: 1px solid #e9dfcb;
-  background: #fcf8ef;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
   border-radius: 8px;
-  color: #96784f;
+  color: var(--color-text-secondary);
   font-size: 12px;
   cursor: pointer;
   min-height: 44px;

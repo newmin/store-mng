@@ -8,6 +8,7 @@ import {
   stickerMatches,
   collectStickerTags,
   resizeStickerBox,
+  fitStickerImageBox,
 } from "../src/lib/stickers";
 
 const asset = {
@@ -17,6 +18,37 @@ const asset = {
   image: "demo-menu:11111111-1111-4111-8111-111111111111",
 };
 describe("sticker library and drafts", () => {
+  it("preserves old aspect settings and persists free image distortion", () => {
+    const initial = applyCommand(
+      demoState(),
+      { type: "saveStickerAsset", asset },
+      "test",
+    );
+    const legacy = newStickerDesign("legacy");
+    expect(stickerDesignSchema.parse(legacy).imageAspectLocked).toBeUndefined();
+    const fit = fitStickerImageBox(legacy.imageBox, 100, 100, "wide");
+    expect(fit.width * 9).toBeCloseTo(fit.height * 5);
+    const design = {
+      ...legacy,
+      assetId: asset.id,
+      image: asset.image,
+      imageAspectLocked: false,
+      imageStretch: true,
+      imageBox: resizeStickerBox(fit, 10, 0, false),
+    };
+    const saved = applyCommand(
+      initial,
+      { type: "saveStickerDesign", design },
+      "test",
+    );
+    expect(saved.stickerDesigns![0]).toEqual(design);
+    expect(
+      stickerDesignSchema.safeParse({
+        ...design,
+        imageBox: fitStickerImageBox(legacy.imageBox, 2000, 10, "wide"),
+      }).success,
+    ).toBe(true);
+  });
   it("resizes artwork proportionally within the page while text boxes resize independently", () => {
     const box = { x: 10, y: 20, width: 20, height: 40 };
     const resized = resizeStickerBox(box, 10, 20, true);

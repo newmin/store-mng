@@ -1,6 +1,15 @@
 "use client";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { Copy, ImagePlus, Pencil, Plus, X } from "lucide-react";
+import {
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Copy,
+  ImagePlus,
+  Pencil,
+  Plus,
+  X,
+} from "lucide-react";
 import { uid } from "@/lib/dates";
 import { resolveMenuImage, uploadMenuImage } from "@/lib/menu-image-client";
 import {
@@ -9,6 +18,7 @@ import {
   newStickerDesign,
   stickerBox,
   resizeStickerBox,
+  fitStickerImageBox,
   stickerMatches,
   type StickerAsset,
   type StickerDesign,
@@ -88,6 +98,8 @@ export function StickerWorkspace({
   const [panelOpen, setPanelOpen] = useState(false);
   const [overflow, setOverflow] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const canvasArea = useRef<HTMLDivElement>(null);
+  const adjustment = useRef<HTMLElement>(null);
   const tagInput = useRef<HTMLInputElement>(null);
   const composingTag = useRef(false);
   const drag = useRef<{
@@ -147,7 +159,20 @@ export function StickerWorkspace({
       }
     };
     window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
+    const outside = (e: globalThis.PointerEvent) => {
+      if (
+        !(e.target instanceof Node) ||
+        canvasArea.current?.contains(e.target) ||
+        adjustment.current?.contains(e.target)
+      )
+        return;
+      setPanelOpen(false);
+    };
+    document.addEventListener("pointerdown", outside, true);
+    return () => {
+      window.removeEventListener("keydown", close);
+      document.removeEventListener("pointerdown", outside, true);
+    };
   }, [panelOpen]);
   function patch(value: Partial<StickerDesign>) {
     setDesign((d) => ({ ...d, ...value }));
@@ -303,7 +328,12 @@ export function StickerWorkspace({
     patch({
       [d.layer]:
         d.mode === "resize"
-          ? resizeStickerBox(d.box, dx, dy, d.layer === "imageBox")
+          ? resizeStickerBox(
+              d.box,
+              dx,
+              dy,
+              d.layer === "imageBox" && design.imageAspectLocked !== false,
+            )
           : stickerBox({ ...d.box, x: d.box.x + dx, y: d.box.y + dy }),
     });
   }
@@ -552,7 +582,7 @@ export function StickerWorkspace({
                 문구 편집
               </button>
             </div>
-            <div className="sticker-canvas">
+            <div ref={canvasArea} className="sticker-canvas">
               <canvas
                 ref={canvas}
                 aria-label="스티커 디자인 미리보기"
@@ -620,7 +650,8 @@ export function StickerWorkspace({
                         design[selected],
                         delta[0],
                         delta[1],
-                        selected === "imageBox",
+                        selected === "imageBox" &&
+                          design.imageAspectLocked !== false,
                       ),
                     });
                   }}
@@ -774,15 +805,13 @@ export function StickerWorkspace({
           </section>
           {panelOpen && (
             <section
+              ref={adjustment}
               className="sticker-controls sticker-adjustment"
               role="dialog"
               aria-modal="false"
-              aria-labelledby="sticker-adjustment-title"
+              aria-label={selected === "imageBox" ? "그림 조정" : "문구 조정"}
             >
               <header>
-                <h2 id="sticker-adjustment-title">
-                  {selected === "imageBox" ? "그림 조정" : "문구 조정"}
-                </h2>
                 <button
                   type="button"
                   className="icon-button"
@@ -799,7 +828,7 @@ export function StickerWorkspace({
                       문구
                       <textarea
                         aria-label="문구"
-                        rows={4}
+                        rows={2}
                         maxLength={2000}
                         value={design.text}
                         onChange={(e) => patch({ text: e.target.value })}
@@ -834,14 +863,51 @@ export function StickerWorkspace({
                       />
                       {design.fontSize}
                     </label>
-                    <label className="checkbox">
-                      <input
-                        type="checkbox"
-                        checked={design.bold}
-                        onChange={(e) => patch({ bold: e.target.checked })}
-                      />
-                      굵게
-                    </label>
+                    <div
+                      className="sticker-text-tools"
+                      role="toolbar"
+                      aria-label="문구 서식"
+                    >
+                      <button
+                        type="button"
+                        aria-label="굵게"
+                        aria-pressed={design.bold}
+                        onClick={() => patch({ bold: !design.bold })}
+                        className="sticker-bold"
+                      >
+                        굵
+                      </button>
+                      {(
+                        [
+                          {
+                            value: "left",
+                            label: "왼쪽 정렬",
+                            Icon: AlignLeft,
+                          },
+                          {
+                            value: "center",
+                            label: "가운데 정렬",
+                            Icon: AlignCenter,
+                          },
+                          {
+                            value: "right",
+                            label: "오른쪽 정렬",
+                            Icon: AlignRight,
+                          },
+                        ] as const
+                      ).map(({ value, label, Icon }) => (
+                        <button
+                          type="button"
+                          key={value}
+                          aria-label={label}
+                          title={label}
+                          aria-pressed={design.align === value}
+                          onClick={() => patch({ align: value })}
+                        >
+                          <Icon size={19} />
+                        </button>
+                      ))}
+                    </div>
                     <label>
                       글자 색
                       <input
@@ -850,33 +916,55 @@ export function StickerWorkspace({
                         onChange={(e) => patch({ color: e.target.value })}
                       />
                     </label>
-                    <label>
-                      문구 정렬
-                      <select
-                        aria-label="문구 정렬"
-                        value={design.align}
-                        onChange={(e) =>
-                          patch({
-                            align: e.target.value as StickerDesign["align"],
-                          })
-                        }
-                      >
-                        <option value="left">왼쪽</option>
-                        <option value="center">가운데</option>
-                        <option value="right">오른쪽</option>
-                      </select>
-                    </label>
                   </>
                 )}
                 {selected === "imageBox" && design.assetId && (
-                  <button
-                    className="text-button"
-                    onClick={() =>
-                      patch({ assetId: undefined, image: undefined })
-                    }
-                  >
-                    그림 빼기
-                  </button>
+                  <>
+                    <div
+                      className="sticker-tabs sticker-aspect"
+                      role="group"
+                      aria-label="그림 비율"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={design.imageAspectLocked !== false}
+                        onClick={() => patch({ imageAspectLocked: true })}
+                      >
+                        비율 고정
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={design.imageAspectLocked === false}
+                        disabled={!image}
+                        onClick={() =>
+                          patch({
+                            imageAspectLocked: false,
+                            imageStretch: true,
+                            ...(!design.imageStretch && image
+                              ? {
+                                  imageBox: fitStickerImageBox(
+                                    design.imageBox,
+                                    image.naturalWidth,
+                                    image.naturalHeight,
+                                    design.shape,
+                                  ),
+                                }
+                              : {}),
+                          })
+                        }
+                      >
+                        자유
+                      </button>
+                    </div>
+                    <button
+                      className="text-button"
+                      onClick={() =>
+                        patch({ assetId: undefined, image: undefined })
+                      }
+                    >
+                      그림 빼기
+                    </button>
+                  </>
                 )}
               </fieldset>
             </section>
@@ -894,7 +982,12 @@ export function StickerWorkspace({
               disabled={working || !!a.archived}
               aria-label={`${a.name} 그림 선택`}
               onClick={() => {
-                patch({ assetId: a.id, image: a.image });
+                patch({
+                  assetId: a.id,
+                  image: a.image,
+                  imageAspectLocked: true,
+                  imageStretch: false,
+                });
                 setTab("studio");
                 setSelected("imageBox");
                 setPanelOpen(true);

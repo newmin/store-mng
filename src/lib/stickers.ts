@@ -51,6 +51,8 @@ export const stickerDesignSchema = z.object({
   text: z.string().max(2000),
   shape: z.enum(["wide", "square"]),
   imageBox: position,
+  imageAspectLocked: z.boolean().optional(),
+  imageStretch: z.boolean().optional(),
   textBox: position,
   font: z.enum(["sans", "serif", "mono"]),
   fontSize: z.number().int().min(12).max(100),
@@ -111,6 +113,26 @@ export function resizeStickerBox(
   const scale = Math.max(minimum, Math.min(maximum, wanted));
   return { ...box, width: box.width * scale, height: box.height * scale };
 }
+export function fitStickerImageBox(
+  box: StickerBox,
+  naturalWidth: number,
+  naturalHeight: number,
+  shape: StickerDesign["shape"],
+): StickerBox {
+  const height = shape === "square" ? 900 : 500;
+  const ratio = Math.min(
+    (box.width * 9) / naturalWidth,
+    (box.height * height) / 100 / naturalHeight,
+  );
+  const width = (naturalWidth * ratio) / 9,
+    fittedHeight = ((naturalHeight * ratio) / height) * 100;
+  return stickerBox({
+    x: box.x + (box.width - width) / 2,
+    y: box.y + (box.height - fittedHeight) / 2,
+    width,
+    height: fittedHeight,
+  });
+}
 export function newStickerDesign(id: string): StickerDesign {
   return {
     id,
@@ -155,13 +177,15 @@ export function drawSticker(
     );
     const iw = image.naturalWidth * ratio,
       ih = image.naturalHeight * ratio;
-    ctx.drawImage(
-      image,
-      b.x + (b.width - iw) / 2,
-      b.y + (b.height - ih) / 2,
-      iw,
-      ih,
-    );
+    if (design.imageStretch) ctx.drawImage(image, b.x, b.y, b.width, b.height);
+    else
+      ctx.drawImage(
+        image,
+        b.x + (b.width - iw) / 2,
+        b.y + (b.height - ih) / 2,
+        iw,
+        ih,
+      );
   }
   const b = box(design.textBox);
   ctx.font = `${design.bold ? "bold " : ""}${design.fontSize}px ${stickerFonts[design.font]}`;

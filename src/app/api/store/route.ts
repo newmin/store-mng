@@ -49,6 +49,17 @@ export async function POST(req: Request) {
       body.command,
       ctx.user.email || ctx.user.id,
     );
+    if (
+      body.command.type === "saveStickerAsset" &&
+      !menuImageBelongsToShop(body.command.asset.image, ctx.shopId)
+    )
+      throw new HttpError("해당 매장의 스티커 그림이 아닙니다.", 403);
+    if (
+      body.command.type === "saveStickerDesign" &&
+      body.command.design.image &&
+      !menuImageBelongsToShop(body.command.design.image, ctx.shopId)
+    )
+      throw new HttpError("해당 매장의 스티커 그림이 아닙니다.", 403);
     const productImage =
       body.command.type === "saveProduct"
         ? body.command.product.image

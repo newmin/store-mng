@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { findMenuPhoto } from "./menu-catalog";
 import { isUploadedMenuImage } from "./menu-image";
+import {
+  stickerAssetSchema,
+  stickerDesignSchema,
+  type StickerAsset,
+  type StickerDesign,
+} from "./stickers";
 
 export const daySchema = z
   .string()
@@ -131,6 +137,8 @@ export type Movement = {
 };
 export type Audit = { at: string; actor: string; message: string };
 export type StoreState = {
+  stickerAssets?: StickerAsset[];
+  stickerDesigns?: StickerDesign[];
   demoSeededMonths?: string[];
   paymentAccount?: string;
   paymentBank?: string;
@@ -147,6 +155,11 @@ export type StoreState = {
   audit: Audit[];
 };
 export const commandSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("saveStickerAsset"), asset: stickerAssetSchema }),
+  z.object({
+    type: z.literal("saveStickerDesign"),
+    design: stickerDesignSchema,
+  }),
   z.object({ type: z.literal("saveOrder"), order: orderSchema }),
   z.object({
     type: z.literal("orderStatus"),

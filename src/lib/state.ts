@@ -252,6 +252,29 @@ export function applyCommand(
   };
   let message = "";
   switch (c.type) {
+    case "saveStickerAsset": {
+      const assets = (s.stickerAssets ||= []);
+      const index = assets.findIndex((a) => a.id === c.asset.id);
+      if (index < 0) assets.push(c.asset);
+      else assets[index] = c.asset;
+      message = "스티커 그림 저장";
+      break;
+    }
+    case "saveStickerDesign": {
+      if (
+        c.design.assetId &&
+        !s.stickerAssets?.some((a) => a.id === c.design.assetId)
+      )
+        throw new Error("그림을 찾을 수 없습니다. 다시 선택하세요.");
+      if (c.design.orderId && !s.orders.some((o) => o.id === c.design.orderId))
+        throw new Error("주문을 찾을 수 없습니다.");
+      const designs = (s.stickerDesigns ||= []);
+      const index = designs.findIndex((d) => d.id === c.design.id);
+      if (index < 0) designs.push(c.design);
+      else designs[index] = c.design;
+      message = "스티커 디자인 저장";
+      break;
+    }
     case "saveOrder": {
       const old = s.orders.find((o) => o.id === c.order.id);
       if (old?.status === "picked")

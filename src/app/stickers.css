@@ -1,0 +1,164 @@
+.stickers {
+  display: grid;
+  gap: 20px;
+}
+.sticker-tabs,
+.sticker-chips,
+.sticker-tag-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.sticker-tabs button,
+.sticker-chips button,
+.sticker-chips span {
+  border: 1px solid #ded9cc;
+  border-radius: 20px;
+  padding: 7px 12px;
+  background: #fffdf7;
+  color: #6e6658;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sticker-tabs button {
+  border-radius: 9px;
+  padding: 11px 16px;
+}
+.sticker-tabs button[aria-pressed="true"],
+.sticker-chips button[aria-pressed="true"] {
+  background: #f3e6cf;
+  border-color: #b38e5c;
+  color: #674820;
+}
+.sticker-filters {
+  display: grid;
+  gap: 12px;
+}
+.sticker-filters > input {
+  max-width: 360px;
+}
+.sticker-asset-form,
+.sticker-controls {
+  padding: 20px;
+  background: #fffdf8;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.sticker-asset-form {
+  max-width: 650px;
+}
+.sticker-asset-form .button-row {
+  margin-top: 16px;
+}
+.sticker-tag-input {
+  flex-wrap: nowrap;
+  margin-top: 12px;
+}
+.sticker-upload-preview {
+  height: 160px;
+  margin-bottom: 14px;
+}
+.sticker-upload-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.sticker-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 14px;
+}
+.sticker-art-card {
+  padding: 12px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.sticker-art-card.selected {
+  border-color: #b38e5c;
+  box-shadow: 0 0 0 1px #b38e5c;
+}
+.sticker-art-select {
+  border: 0;
+  background: transparent;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+.sticker-art-select img,
+.sticker-art-select > span {
+  width: 100%;
+  height: 130px;
+  object-fit: contain;
+  background: repeating-conic-gradient(#f1f1ed 0% 25%, white 0% 50%) 50% / 16px
+    16px;
+}
+.sticker-art-select b {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.sticker-art-card .sticker-chips span {
+  padding: 3px 8px;
+  font-size: 10px;
+}
+.sticker-studio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 20px;
+  align-items: start;
+}
+.sticker-preview {
+  position: sticky;
+  top: 20px;
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+.sticker-preview canvas {
+  width: 100%;
+  height: auto;
+  background: white;
+  border: 1px solid #d3cbbb;
+  border-radius: 8px;
+  touch-action: none;
+  cursor: move;
+}
+.sticker-controls input[type="range"] {
+  padding: 0;
+  min-height: 30px;
+  accent-color: #a17c45;
+}
+.sticker-controls label {
+  font-size: 12px;
+}
+.sticker-controls .sticker-tabs {
+  margin-bottom: 16px;
+}
+.sticker-controls .sticker-tabs button {
+  flex: 1;
+  padding: 9px;
+  font-size: 11px;
+}
+.sticker-empty {
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--muted);
+}
+@media (max-width: 800px) {
+  .sticker-studio {
+    grid-template-columns: 1fr;
+  }
+  .sticker-preview {
+    position: static;
+  }
+  .sticker-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

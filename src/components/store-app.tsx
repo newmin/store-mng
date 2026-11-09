@@ -23,6 +23,7 @@ import {
   Settings,
   ShoppingBag,
   Sparkles,
+  StickyNote,
   Undo2,
   Users,
   X,
@@ -46,6 +47,7 @@ import { BackToTop } from "./back-to-top";
 import { MenuManager } from "./menu-manager";
 import type { ProductSection } from "./product-form";
 import { ProductionWorkspace } from "./production-workspace";
+import { StickerWorkspace } from "./sticker-workspace";
 import { fulfillmentLabel } from "@/lib/order-message";
 import type { Command, Material, Order, Plan, Product, Lot } from "@/lib/types";
 import {
@@ -61,7 +63,13 @@ import {
 } from "./forms";
 
 type View =
-  "home" | "orders" | "production" | "inventory" | "closing" | "settings";
+  | "home"
+  | "orders"
+  | "production"
+  | "inventory"
+  | "closing"
+  | "settings"
+  | "stickers";
 type Modal =
   | { type: "order"; order?: Order }
   | { type: "message"; orderId: string }
@@ -81,6 +89,7 @@ const navigation = [
   { id: "inventory" as const, label: "재료 · 비품", icon: Package },
   { id: "closing" as const, label: "마감 기록", icon: ClipboardList },
   { id: "settings" as const, label: "매장 설정", icon: Settings },
+  { id: "stickers" as const, label: "스티커", icon: StickyNote },
 ];
 const number = (n: number) =>
   n.toLocaleString("ko-KR", { maximumFractionDigits: 3 });
@@ -173,7 +182,7 @@ export default function StoreApp() {
   const store = useStore();
   const { state, ready, user, busy, error, setError, run, refresh, version } =
     store;
-  const [view, setView] = useState<View>("home"),
+  const [view, changeView] = useState<View>("home"),
     [date, setDate] = useState(today()),
     [range, setRange] = useState<"day" | "week" | "custom">("day"),
     [customEnd, setCustomEnd] = useState(addDays(today(), 6)),
@@ -188,6 +197,16 @@ export default function StoreApp() {
     [recovery, setRecovery] = useState(false);
   const todayDate = today();
   const [productSaving, setProductSaving] = useState(false);
+  const [stickerEditing, setStickerEditing] = useState(false);
+  function setView(next: View) {
+    if (
+      next !== view &&
+      stickerEditing &&
+      !confirm("저장하지 않은 스티커 편집을 닫을까요?")
+    )
+      return;
+    changeView(next);
+  }
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [view]);
@@ -203,7 +222,7 @@ export default function StoreApp() {
     return () => data?.subscription.unsubscribe();
   }, []);
   useEffect(() => {
-    if (!sharedMode || !user || modal || busy) return;
+    if (!sharedMode || !user || modal || busy || stickerEditing) return;
     const handler = () => {
       if (document.visibilityState === "visible") void refresh();
     };
@@ -213,7 +232,7 @@ export default function StoreApp() {
       clearInterval(id);
       window.removeEventListener("focus", handler);
     };
-  }, [user, modal, busy, refresh]);
+  }, [user, modal, busy, refresh, stickerEditing]);
   const open = (m: Modal) => {
     setError("");
     setModal(m);
@@ -548,7 +567,7 @@ export default function StoreApp() {
               </button>
             ) : null}
           </div>
-          {error && !modal && (
+          {error && !modal && view !== "stickers" && (
             <Notice message={error} onDismiss={() => setError("")} />
           )}
           {view === "inventory" &&
@@ -572,7 +591,7 @@ export default function StoreApp() {
                 message="생산 기준 미등록 메뉴는 재료 계산에서 제외됩니다. 매장 설정에서 생산량·레시피를 등록해 주세요."
               />
             )}
-          {view !== "settings" && (
+          {view !== "settings" && view !== "stickers" && (
             <div className="date-toolbar">
               <div className="date-switch">
                 <button
@@ -1239,6 +1258,13 @@ export default function StoreApp() {
           )}
           {view === "settings" && (
             <>
+              <button
+                className="button secondary"
+                onClick={() => setView("stickers")}
+              >
+                <StickyNote size={18} />
+                스티커 그림 관리 · 제작
+              </button>
               <MenuManager
                 state={state}
                 onEdit={(product, section) =>
@@ -1350,11 +1376,18 @@ export default function StoreApp() {
               </section>
             </>
           )}
+          {view === "stickers" && (
+            <StickerWorkspace
+              state={state}
+              run={run}
+              onEditing={setStickerEditing}
+            />
+          )}
         </main>
       </div>
       <nav className="mobile-nav">
         {navigation
-          .filter((n) => n.id !== "settings")
+          .filter((n) => n.id !== "settings" && n.id !== "stickers")
           .map((n) => (
             <button
               key={n.id}

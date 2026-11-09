@@ -1,12 +1,14 @@
 "use client";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { ImagePlus, Pencil, Plus, X } from "lucide-react";
+import { Copy, ImagePlus, Pencil, Plus, X } from "lucide-react";
 import { uid } from "@/lib/dates";
 import { resolveMenuImage, uploadMenuImage } from "@/lib/menu-image-client";
 import {
   drawSticker,
+  collectStickerTags,
   newStickerDesign,
   stickerBox,
+  resizeStickerBox,
   stickerMatches,
   type StickerAsset,
   type StickerDesign,
@@ -83,14 +85,18 @@ export function StickerWorkspace({
   const [notice, setNotice] = useState(""),
     [success, setSuccess] = useState("");
   const [selected, setSelected] = useState<"imageBox" | "textBox">("textBox");
+  const [panelOpen, setPanelOpen] = useState(false);
   const [overflow, setOverflow] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const tagInput = useRef<HTMLInputElement>(null);
+  const composingTag = useRef(false);
   const drag = useRef<{
     id: number;
     x: number;
     y: number;
     box: StickerDesign["textBox"];
     layer: "imageBox" | "textBox";
+    mode: "move" | "resize";
   } | null>(null);
   const assets = state.stickerAssets || [];
   const artwork = assets.find((a) => a.id === design.assetId);
@@ -119,12 +125,30 @@ export function StickerWorkspace({
     let active = true;
     void document.fonts.ready.then(() => {
       if (active && canvas.current)
-        setOverflow(drawSticker(canvas.current, design, image, selected));
+        setOverflow(
+          drawSticker(
+            canvas.current,
+            design,
+            image,
+            panelOpen ? selected : undefined,
+          ),
+        );
     });
     return () => {
       active = false;
     };
-  }, [design, image, selected, tab]);
+  }, [design, image, selected, tab, panelOpen]);
+  useEffect(() => {
+    if (!panelOpen) return;
+    const close = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setPanelOpen(false);
+      }
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [panelOpen]);
   function patch(value: Partial<StickerDesign>) {
     setDesign((d) => ({ ...d, ...value }));
     setDirty(true);
@@ -132,21 +156,30 @@ export function StickerWorkspace({
   function discard() {
     return !dirty || confirm("저장하지 않은 디자인 변경을 버릴까요?");
   }
-  function addTag() {
-    const value = tag.trim();
-    if (!asset || !value) return;
-    if (value.length > 24 || asset.tags.length >= 20) {
-      setNotice("태그는 24자 이내, 그림당 20개까지 등록할 수 있습니다.");
-      return;
+  function updateTags(value: string, complete = false) {
+    if (!asset) return;
+    try {
+      const result = collectStickerTags(asset.tags, value, complete);
+      setAsset({ ...asset, tags: result.tags });
+      setTag(result.remaining);
+    } catch (e) {
+      setTag(value);
+      setNotice((e as Error).message);
     }
-    setAsset({ ...asset, tags: [...new Set([...asset.tags, value])] });
-    setTag("");
+  }
+  function addTag() {
+    updateTags(tag, true);
+    tagInput.current?.focus({ preventScroll: true });
   }
   async function saveAsset() {
     if (!asset) return;
     setWorking(true);
     try {
-      await run({ type: "saveStickerAsset", asset });
+      const result = collectStickerTags(asset.tags, tag, true);
+      await run({
+        type: "saveStickerAsset",
+        asset: { ...asset, tags: result.tags },
+      });
       setAsset(null);
       setSuccess("그림을 저장했습니다.");
     } catch (e) {
@@ -171,22 +204,51 @@ export function StickerWorkspace({
       setWorking(false);
     }
   }
+  async function makePng() {
+    await document.fonts.ready;
+    if ((design.assetId || design.image) && !image)
+      throw new Error("그림을 불러온 뒤 다시 시도해 주세요.");
+    const output = document.createElement("canvas");
+    if (drawSticker(output, design, image))
+      throw new Error(
+        "문구가 영역을 넘었습니다. 글자 크기나 문구 영역을 조절해 주세요.",
+      );
+    return new Promise<Blob>((resolve, reject) =>
+      output.toBlob(
+        (b) =>
+          b ? resolve(b) : reject(new Error("이미지를 만들지 못했습니다.")),
+        "image/png",
+      ),
+    );
+  }
+  async function copyImage() {
+    setNotice("");
+    setSuccess("");
+    if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+      setNotice(
+        "이 브라우저에서는 이미지 복사를 지원하지 않습니다. PNG 저장을 이용해 주세요.",
+      );
+      return;
+    }
+    setWorking(true);
+    try {
+      // Pass a promise so Safari keeps the clipboard write in the tap gesture.
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": makePng() }),
+      ]);
+      setSuccess("이미지를 복사했습니다.");
+    } catch {
+      setNotice(
+        "이미지를 복사하지 못했습니다. 복사 권한을 확인하거나 PNG 저장을 이용해 주세요.",
+      );
+    } finally {
+      setWorking(false);
+    }
+  }
   async function download() {
     setWorking(true);
     try {
-      await document.fonts.ready;
-      const output = document.createElement("canvas");
-      if (drawSticker(output, design, image))
-        throw new Error(
-          "문구가 영역을 넘었습니다. 글자 크기나 문구 영역을 조절해 주세요.",
-        );
-      const blob = await new Promise<Blob>((resolve, reject) =>
-        output.toBlob(
-          (b) =>
-            b ? resolve(b) : reject(new Error("이미지를 만들지 못했습니다.")),
-          "image/png",
-        ),
-      );
+      const blob = await makePng();
       const url = URL.createObjectURL(blob),
         a = document.createElement("a");
       a.href = url;
@@ -216,16 +278,34 @@ export function StickerWorkspace({
         y <= b.y + b.height
       );
     });
-    if (!hit) return;
+    if (!hit) {
+      setPanelOpen(false);
+      return;
+    }
     setSelected(hit);
+    setPanelOpen(true);
     drag.current = {
       id: e.pointerId,
       x: e.clientX,
       y: e.clientY,
       box: design[hit],
       layer: hit,
+      mode: "move",
     };
     e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function movePointer(e: PointerEvent<HTMLElement>) {
+    const d = drag.current,
+      r = canvas.current?.getBoundingClientRect();
+    if (!d || d.id !== e.pointerId || !r) return;
+    const dx = ((e.clientX - d.x) / r.width) * 100,
+      dy = ((e.clientY - d.y) / r.height) * 100;
+    patch({
+      [d.layer]:
+        d.mode === "resize"
+          ? resizeStickerBox(d.box, dx, dy, d.layer === "imageBox")
+          : stickerBox({ ...d.box, x: d.box.x + dx, y: d.box.y + dy }),
+    });
   }
   return (
     <div className="stickers">
@@ -242,7 +322,10 @@ export function StickerWorkspace({
         <button
           type="button"
           aria-pressed={tab === "library"}
-          onClick={() => setTab("library")}
+          onClick={() => {
+            setTab("library");
+            setPanelOpen(false);
+          }}
         >
           그림 관리
         </button>
@@ -384,12 +467,32 @@ export function StickerWorkspace({
                 </div>
                 <div className="sticker-tag-input">
                   <input
+                    ref={tagInput}
                     aria-label="추가할 태그"
                     value={tag}
-                    maxLength={24}
-                    onChange={(e) => setTag(e.target.value)}
+                    maxLength={1024}
+                    autoComplete="off"
+                    onCompositionStart={() => {
+                      composingTag.current = true;
+                    }}
+                    onCompositionEnd={(e) => {
+                      composingTag.current = false;
+                      updateTags(e.currentTarget.value);
+                    }}
+                    onChange={(e) => {
+                      if (
+                        composingTag.current ||
+                        (e.nativeEvent as InputEvent).isComposing
+                      )
+                        setTag(e.target.value);
+                      else updateTags(e.target.value);
+                    }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                      if (
+                        e.key === "Enter" &&
+                        !e.nativeEvent.isComposing &&
+                        !composingTag.current
+                      ) {
                         e.preventDefault();
                         addTag();
                       }
@@ -398,6 +501,7 @@ export function StickerWorkspace({
                   <button
                     type="button"
                     className="button secondary"
+                    onPointerDown={(e) => e.preventDefault()}
                     onClick={addTag}
                   >
                     태그 추가
@@ -426,29 +530,105 @@ export function StickerWorkspace({
       {tab === "studio" && (
         <div className="sticker-studio">
           <section className="sticker-preview">
-            <canvas
-              ref={canvas}
-              aria-label="스티커 디자인 미리보기"
-              onPointerDown={pointerDown}
-              onPointerMove={(e) => {
-                const d = drag.current;
-                if (!d || d.id !== e.pointerId) return;
-                const r = e.currentTarget.getBoundingClientRect();
-                patch({
-                  [d.layer]: stickerBox({
-                    ...d.box,
-                    x: d.box.x + ((e.clientX - d.x) / r.width) * 100,
-                    y: d.box.y + ((e.clientY - d.y) / r.height) * 100,
-                  }),
-                });
-              }}
-              onPointerUp={() => {
-                drag.current = null;
-              }}
-              onPointerCancel={() => {
-                drag.current = null;
-              }}
-            />
+            <div className="sticker-tabs" role="group" aria-label="조정 대상">
+              {image && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelected("imageBox");
+                    setPanelOpen(true);
+                  }}
+                >
+                  그림 편집
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelected("textBox");
+                  setPanelOpen(true);
+                }}
+              >
+                문구 편집
+              </button>
+            </div>
+            <div className="sticker-canvas">
+              <canvas
+                ref={canvas}
+                aria-label="스티커 디자인 미리보기"
+                onPointerDown={pointerDown}
+                onPointerMove={movePointer}
+                onPointerUp={() => {
+                  drag.current = null;
+                  const rect = canvas.current?.getBoundingClientRect();
+                  if (rect && rect.bottom > window.innerHeight * 0.6)
+                    canvas.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                }}
+                onPointerCancel={() => {
+                  drag.current = null;
+                }}
+              />
+              {panelOpen && (
+                <button
+                  type="button"
+                  className="sticker-resize-handle"
+                  aria-label={
+                    selected === "imageBox"
+                      ? "그림 크기 조절"
+                      : "문구 영역 크기 조절"
+                  }
+                  style={{
+                    left: `${design[selected].x + design[selected].width}%`,
+                    top: `${design[selected].y + design[selected].height}%`,
+                  }}
+                  onPointerDown={(e) => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    drag.current = {
+                      id: e.pointerId,
+                      x: e.clientX,
+                      y: e.clientY,
+                      box: design[selected],
+                      layer: selected,
+                      mode: "resize",
+                    };
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  }}
+                  onPointerMove={movePointer}
+                  onPointerUp={() => {
+                    drag.current = null;
+                  }}
+                  onPointerCancel={() => {
+                    drag.current = null;
+                  }}
+                  onKeyDown={(e) => {
+                    const delta = (
+                      {
+                        ArrowRight: [1, 0],
+                        ArrowLeft: [-1, 0],
+                        ArrowDown: [0, 1],
+                        ArrowUp: [0, -1],
+                      } as Record<string, number[]>
+                    )[e.key];
+                    if (!delta) return;
+                    e.preventDefault();
+                    patch({
+                      [selected]: resizeStickerBox(
+                        design[selected],
+                        delta[0],
+                        delta[1],
+                        selected === "imageBox",
+                      ),
+                    });
+                  }}
+                >
+                  <span aria-hidden="true" />
+                </button>
+              )}
+            </div>
             {(overflow || error) && (
               <p role="status" className="danger-text">
                 {error ||
@@ -474,222 +654,233 @@ export function StickerWorkspace({
               >
                 PNG 저장
               </button>
+              <button
+                type="button"
+                className="button secondary"
+                aria-label="스티커 이미지 복사"
+                title="이미지 복사"
+                disabled={
+                  working ||
+                  overflow ||
+                  !!((design.assetId || design.image) && !image)
+                }
+                onClick={() => void copyImage()}
+              >
+                <Copy size={19} />
+              </button>
             </div>
           </section>
-          <section className="sticker-controls">
-            <fieldset disabled={working}>
-              <label>
-                저장한 디자인
-                <select
-                  aria-label="저장한 디자인"
-                  value={
-                    state.stickerDesigns?.some((d) => d.id === design.id)
-                      ? design.id
-                      : ""
-                  }
-                  onChange={(e) => {
-                    const saved = state.stickerDesigns?.find(
-                      (d) => d.id === e.target.value,
-                    );
-                    if (saved && discard()) {
-                      setDesign(structuredClone(saved));
+          <section className="sticker-controls sticker-document">
+            <details>
+              <summary>디자인 정보</summary>
+              <fieldset disabled={working}>
+                <label>
+                  저장한 디자인
+                  <select
+                    aria-label="저장한 디자인"
+                    value={
+                      state.stickerDesigns?.some((d) => d.id === design.id)
+                        ? design.id
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const saved = state.stickerDesigns?.find(
+                        (d) => d.id === e.target.value,
+                      );
+                      if (saved && discard()) {
+                        setDesign(structuredClone(saved));
+                        setPanelOpen(false);
+                        setDirty(false);
+                      }
+                    }}
+                  >
+                    <option value="">선택</option>
+                    {state.stickerDesigns?.map((d) => (
+                      <option value={d.id} key={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    if (discard()) {
+                      setDesign(newStickerDesign(uid()));
+                      setPanelOpen(false);
                       setDirty(false);
                     }
                   }}
                 >
-                  <option value="">선택</option>
-                  {state.stickerDesigns?.map((d) => (
-                    <option value={d.id} key={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                className="text-button"
-                onClick={() => {
-                  if (discard()) {
-                    setDesign(newStickerDesign(uid()));
-                    setDirty(false);
-                  }
-                }}
-              >
-                <Plus size={15} />새 디자인
-              </button>
-              <label>
-                디자인 이름
-                <input
-                  value={design.name}
-                  maxLength={80}
-                  onChange={(e) => patch({ name: e.target.value })}
-                />
-              </label>
-              <label>
-                주문 문구 가져오기
-                <select
-                  aria-label="주문 문구 가져오기"
-                  value={design.orderId || ""}
-                  onChange={(e) => {
-                    const order = state.orders.find(
-                      (o) => o.id === e.target.value,
-                    );
-                    if (
-                      order &&
-                      design.text &&
-                      !confirm("현재 문구를 주문 문구로 바꿀까요?")
-                    )
-                      return;
-                    patch({
-                      orderId: order?.id,
-                      text: order?.sticker || design.text,
-                    });
-                  }}
-                >
-                  <option value="">직접 입력</option>
-                  {state.orders
-                    .filter((o) => o.status !== "cancelled" && o.sticker.trim())
-                    .sort((a, b) => b.date.localeCompare(a.date))
-                    .map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.date} · {o.customer}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label>
-                문구
-                <textarea
-                  aria-label="문구"
-                  rows={4}
-                  maxLength={2000}
-                  value={design.text}
-                  onChange={(e) => patch({ text: e.target.value })}
-                />
-              </label>
-              <label>
-                모양
-                <select
-                  aria-label="모양"
-                  value={design.shape}
-                  onChange={(e) =>
-                    patch({ shape: e.target.value as StickerDesign["shape"] })
-                  }
-                >
-                  <option value="wide">가로형</option>
-                  <option value="square">정사각형</option>
-                </select>
-              </label>
-              <label>
-                글꼴
-                <select
-                  aria-label="글꼴"
-                  value={design.font}
-                  onChange={(e) =>
-                    patch({ font: e.target.value as StickerDesign["font"] })
-                  }
-                >
-                  <option value="sans">고딕</option>
-                  <option value="serif">명조</option>
-                  <option value="mono">고정폭</option>
-                </select>
-              </label>
-              <label>
-                글자 크기
-                <input
-                  type="range"
-                  min={12}
-                  max={100}
-                  value={design.fontSize}
-                  onChange={(e) => patch({ fontSize: Number(e.target.value) })}
-                />
-                {design.fontSize}
-              </label>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={design.bold}
-                  onChange={(e) => patch({ bold: e.target.checked })}
-                />
-                굵게
-              </label>
-              <label>
-                글자 색
-                <input
-                  type="color"
-                  value={design.color}
-                  onChange={(e) => patch({ color: e.target.value })}
-                />
-              </label>
-              <label>
-                문구 정렬
-                <select
-                  aria-label="문구 정렬"
-                  value={design.align}
-                  onChange={(e) =>
-                    patch({ align: e.target.value as StickerDesign["align"] })
-                  }
-                >
-                  <option value="left">왼쪽</option>
-                  <option value="center">가운데</option>
-                  <option value="right">오른쪽</option>
-                </select>
-              </label>
-              <div
-                className="sticker-tabs"
-                role="group"
-                aria-label="배치 조절 대상"
-              >
-                <button
-                  aria-pressed={selected === "imageBox"}
-                  onClick={() => setSelected("imageBox")}
-                >
-                  그림 위치
+                  <Plus size={15} />새 디자인
                 </button>
-                <button
-                  aria-pressed={selected === "textBox"}
-                  onClick={() => setSelected("textBox")}
-                >
-                  문구 위치
-                </button>
-              </div>
-              {(["x", "y", "width", "height"] as const).map((key) => (
-                <label key={key}>
-                  {
-                    {
-                      x: "가로 위치",
-                      y: "세로 위치",
-                      width: "영역 너비",
-                      height: "영역 높이",
-                    }[key]
-                  }
+                <label>
+                  디자인 이름
                   <input
-                    type="range"
-                    min={key === "width" || key === "height" ? 5 : 0}
-                    max={100}
-                    value={design[selected][key]}
-                    onChange={(e) =>
-                      patch({
-                        [selected]: stickerBox({
-                          ...design[selected],
-                          [key]: Number(e.target.value),
-                        }),
-                      })
-                    }
+                    value={design.name}
+                    maxLength={80}
+                    onChange={(e) => patch({ name: e.target.value })}
                   />
                 </label>
-              ))}
-              {design.assetId && (
-                <button
-                  className="text-button"
-                  onClick={() =>
-                    patch({ assetId: undefined, image: undefined })
-                  }
-                >
-                  그림 빼기
-                </button>
-              )}
-            </fieldset>
+                <label>
+                  주문 문구 가져오기
+                  <select
+                    aria-label="주문 문구 가져오기"
+                    value={design.orderId || ""}
+                    onChange={(e) => {
+                      const order = state.orders.find(
+                        (o) => o.id === e.target.value,
+                      );
+                      if (
+                        order &&
+                        design.text &&
+                        !confirm("현재 문구를 주문 문구로 바꿀까요?")
+                      )
+                        return;
+                      patch({
+                        orderId: order?.id,
+                        text: order?.sticker || design.text,
+                      });
+                    }}
+                  >
+                    <option value="">직접 입력</option>
+                    {state.orders
+                      .filter(
+                        (o) => o.status !== "cancelled" && o.sticker.trim(),
+                      )
+                      .sort((a, b) => b.date.localeCompare(a.date))
+                      .map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.date} · {o.customer}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  모양
+                  <select
+                    aria-label="모양"
+                    value={design.shape}
+                    onChange={(e) =>
+                      patch({ shape: e.target.value as StickerDesign["shape"] })
+                    }
+                  >
+                    <option value="wide">가로형</option>
+                    <option value="square">정사각형</option>
+                  </select>
+                </label>
+              </fieldset>
+            </details>
           </section>
+          {panelOpen && (
+            <section
+              className="sticker-controls sticker-adjustment"
+              role="dialog"
+              aria-modal="false"
+              aria-labelledby="sticker-adjustment-title"
+            >
+              <header>
+                <h2 id="sticker-adjustment-title">
+                  {selected === "imageBox" ? "그림 조정" : "문구 조정"}
+                </h2>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="조정창 닫기"
+                  onClick={() => setPanelOpen(false)}
+                >
+                  <X size={20} />
+                </button>
+              </header>
+              <fieldset disabled={working}>
+                {selected === "textBox" && (
+                  <>
+                    <label>
+                      문구
+                      <textarea
+                        aria-label="문구"
+                        rows={4}
+                        maxLength={2000}
+                        value={design.text}
+                        onChange={(e) => patch({ text: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      글꼴
+                      <select
+                        aria-label="글꼴"
+                        value={design.font}
+                        onChange={(e) =>
+                          patch({
+                            font: e.target.value as StickerDesign["font"],
+                          })
+                        }
+                      >
+                        <option value="sans">고딕</option>
+                        <option value="serif">명조</option>
+                        <option value="mono">고정폭</option>
+                      </select>
+                    </label>
+                    <label>
+                      글자 크기
+                      <input
+                        type="range"
+                        min={12}
+                        max={100}
+                        value={design.fontSize}
+                        onChange={(e) =>
+                          patch({ fontSize: Number(e.target.value) })
+                        }
+                      />
+                      {design.fontSize}
+                    </label>
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={design.bold}
+                        onChange={(e) => patch({ bold: e.target.checked })}
+                      />
+                      굵게
+                    </label>
+                    <label>
+                      글자 색
+                      <input
+                        type="color"
+                        value={design.color}
+                        onChange={(e) => patch({ color: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      문구 정렬
+                      <select
+                        aria-label="문구 정렬"
+                        value={design.align}
+                        onChange={(e) =>
+                          patch({
+                            align: e.target.value as StickerDesign["align"],
+                          })
+                        }
+                      >
+                        <option value="left">왼쪽</option>
+                        <option value="center">가운데</option>
+                        <option value="right">오른쪽</option>
+                      </select>
+                    </label>
+                  </>
+                )}
+                {selected === "imageBox" && design.assetId && (
+                  <button
+                    className="text-button"
+                    onClick={() =>
+                      patch({ assetId: undefined, image: undefined })
+                    }
+                  >
+                    그림 빼기
+                  </button>
+                )}
+              </fieldset>
+            </section>
+          )}
         </div>
       )}
       <div className="sticker-gallery">
@@ -705,6 +896,14 @@ export function StickerWorkspace({
               onClick={() => {
                 patch({ assetId: a.id, image: a.image });
                 setTab("studio");
+                setSelected("imageBox");
+                setPanelOpen(true);
+                requestAnimationFrame(() =>
+                  canvas.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  }),
+                );
               }}
             >
               <Artwork asset={a} />

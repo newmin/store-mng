@@ -6,6 +6,8 @@ import {
   stickerBox,
   stickerDesignSchema,
   stickerMatches,
+  collectStickerTags,
+  resizeStickerBox,
 } from "../src/lib/stickers";
 
 const asset = {
@@ -15,6 +17,44 @@ const asset = {
   image: "demo-menu:11111111-1111-4111-8111-111111111111",
 };
 describe("sticker library and drafts", () => {
+  it("resizes artwork proportionally within the page while text boxes resize independently", () => {
+    const box = { x: 10, y: 20, width: 20, height: 40 };
+    const resized = resizeStickerBox(box, 10, 20, true);
+    expect(resized).toEqual({ x: 10, y: 20, width: 30, height: 60 });
+    expect(resizeStickerBox(box, 500, 500, true)).toEqual({
+      x: 10,
+      y: 20,
+      width: 40,
+      height: 80,
+    });
+    const small = resizeStickerBox(box, -500, -500, true);
+    expect(small.width).toBe(5);
+    expect(small.height).toBe(10);
+    expect(resizeStickerBox(box, 10, 0, false)).toEqual({
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 40,
+    });
+  });
+  it("turns separators and pasted lists into chips while preserving unfinished input", () => {
+    expect(collectStickerTags([], "개업,응원 생일")).toEqual({
+      tags: ["개업", "응원"],
+      remaining: "생일",
+    });
+    expect(collectStickerTags(["개업"], "개업, 감사 ")).toEqual({
+      tags: ["개업", "감사"],
+      remaining: "",
+    });
+    expect(collectStickerTags([], "백일,\n돌잔치\t감사", true)).toEqual({
+      tags: ["백일", "돌잔치", "감사"],
+      remaining: "",
+    });
+    const full = Array.from({ length: 20 }, (_, i) => `태그${i}`);
+    expect(collectStickerTags(full, "태그0,", true).tags).toHaveLength(20);
+    expect(() => collectStickerTags(full, "추가,", true)).toThrow();
+    expect(() => collectStickerTags([], "가".repeat(25), true)).toThrow();
+  });
   it("adds optional collections to legacy state without changing production or orders", () => {
     const initial = demoState();
     const state = applyCommand(

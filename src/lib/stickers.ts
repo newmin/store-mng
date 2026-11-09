@@ -2,6 +2,22 @@ import { z } from "zod";
 import { isUploadedMenuImage } from "./menu-image";
 
 const key = z.string().min(1).max(100);
+export function collectStickerTags(
+  existing: string[],
+  input: string,
+  complete = false,
+) {
+  const parts = input.split(/[\s,]+/);
+  const remaining = complete ? "" : parts.pop() || "";
+  const tags = [...new Set([...existing, ...parts.filter(Boolean)])];
+  if (
+    tags.length > 20 ||
+    tags.some((tag) => tag.length > 24) ||
+    remaining.length > 24
+  )
+    throw new Error("태그는 24자 이내, 그림당 20개까지 등록할 수 있습니다.");
+  return { tags, remaining };
+}
 export const stickerAssetSchema = z.object({
   id: key,
   name: z.string().trim().min(1).max(80),
@@ -72,6 +88,28 @@ export function stickerBox(box: StickerBox): StickerBox {
     x: Math.max(0, Math.min(100 - width, box.x)),
     y: Math.max(0, Math.min(100 - height, box.y)),
   };
+}
+export function resizeStickerBox(
+  box: StickerBox,
+  dx: number,
+  dy: number,
+  proportional: boolean,
+): StickerBox {
+  if (!proportional)
+    return {
+      ...box,
+      width: Math.max(5, Math.min(100 - box.x, box.width + dx)),
+      height: Math.max(5, Math.min(100 - box.y, box.height + dy)),
+    };
+  const wanted =
+    1 + (dx * box.width + dy * box.height) / (box.width ** 2 + box.height ** 2);
+  const minimum = Math.max(5 / box.width, 5 / box.height);
+  const maximum = Math.min(
+    (100 - box.x) / box.width,
+    (100 - box.y) / box.height,
+  );
+  const scale = Math.max(minimum, Math.min(maximum, wanted));
+  return { ...box, width: box.width * scale, height: box.height * scale };
 }
 export function newStickerDesign(id: string): StickerDesign {
   return {

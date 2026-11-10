@@ -140,6 +140,7 @@ export type StoreState = {
   stickerAssets?: StickerAsset[];
   stickerDesigns?: StickerDesign[];
   demoSeededMonths?: string[];
+  demoProductionVersion?: number;
   paymentAccount?: string;
   paymentBank?: string;
   catalogVersion?: number;

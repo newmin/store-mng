@@ -39,6 +39,7 @@ import {
 } from "@/lib/calculations";
 import { useStore } from "@/lib/use-store";
 import { authFetch, sharedMode, supabase } from "@/lib/client";
+import { recommendationContext } from "@/lib/recommendation-context";
 import { brand } from "@/lib/brand";
 import { Notice } from "./notice";
 import { BrandMark, BrandWelcome } from "./store-brand";
@@ -197,6 +198,8 @@ export default function StoreApp() {
     [thinking, setThinking] = useState(false),
     [recovery, setRecovery] = useState(false);
   const todayDate = today();
+  const latestRevision = useRef(state?.revision);
+  latestRevision.current = state?.revision;
   const [productSaving, setProductSaving] = useState(false);
   const [stickerEditing, setStickerEditing] = useState(false);
   const [stickerHeader, setStickerHeader] = useState<StickerHeader>({
@@ -265,18 +268,26 @@ export default function StoreApp() {
     } catch {}
   }
   async function recommend() {
+    if (!state || thinking) return;
+    const requestedRevision = state.revision;
+    const requestedVersion = sharedMode ? version : requestedRevision;
     setThinking(true);
     setError("");
     try {
-      if (!sharedMode)
-        throw new Error(
-          "추가 메뉴 추천을 사용하려면 매장 데이터와 AI 연결이 필요해요.",
-        );
       const result = await authFetch("/api/recommend", {
         method: "POST",
-        body: JSON.stringify({ date, version }),
+        body: JSON.stringify({
+          date,
+          version: requestedVersion,
+          ...(!sharedMode
+            ? { snapshot: recommendationContext(state, date) }
+            : {}),
+        }),
       });
-      if (result.version !== version)
+      if (
+        result.version !== requestedVersion ||
+        latestRevision.current !== requestedRevision
+      )
         throw new Error("주문·재고가 변경됐습니다. 다시 추천받으세요.");
       open({
         type: "recommend",
@@ -966,24 +977,33 @@ export default function StoreApp() {
             </>
           )}
           {view === "production" && (
-            <ProductionWorkspace
-              state={state}
-              date={date}
-              today={todayDate}
-              busy={busy}
-              thinking={thinking}
-              onEdit={() => open({ type: "plan", plan })}
-              onComplete={(plan) => open({ type: "complete", plan })}
-              onRecommend={() => void recommend()}
-              onProduct={(product) =>
-                open({ type: "product", product, section: "production" })
-              }
-              onInventory={() => {
-                setInventoryKind("ingredient");
-                setView("inventory");
-              }}
-              onSettings={() => open({ type: "settings" })}
-            />
+            <>
+              {!sharedMode && (
+                <p className="callout">
+                  말랑콩떡 체험 데이터입니다. 레시피·재고·생산 및 마감 기록은
+                  가상이며, 추천 결과는 실제 생산 전에 매장 기준으로 확인해
+                  주세요.
+                </p>
+              )}
+              <ProductionWorkspace
+                state={state}
+                date={date}
+                today={todayDate}
+                busy={busy}
+                thinking={thinking}
+                onEdit={() => open({ type: "plan", plan })}
+                onComplete={(plan) => open({ type: "complete", plan })}
+                onRecommend={() => void recommend()}
+                onProduct={(product) =>
+                  open({ type: "product", product, section: "production" })
+                }
+                onInventory={() => {
+                  setInventoryKind("ingredient");
+                  setView("inventory");
+                }}
+                onSettings={() => open({ type: "settings" })}
+              />
+            </>
           )}
           {view === "inventory" && (
             <>
@@ -1491,7 +1511,7 @@ export default function StoreApp() {
                               ? "오늘의 메뉴 추천 기준"
                               : modal.type === "image"
                                 ? "스티커 참고 이미지"
-                                : "오늘의 메뉴 추천안"
+                                : "AI 메뉴 추천 결과"
           }
           busy={busy || productSaving}
           onClose={() => setModal(null)}
@@ -1590,13 +1610,26 @@ export default function StoreApp() {
             <div>
               {modal.lines.map((l) => (
                 <div className="recommendation" key={l.productId}>
-                  <Sparkles size={22} />
-                  <div>
+                  <div className="recommendation-heading">
                     <h3>
-                      {productName(l.productId)} · {l.batches} 생산 단위
+                      <Sparkles size={20} />
+                      {productName(l.productId)}
                     </h3>
-                    <p>{l.reason}</p>
+                    <strong>
+                      {(
+                        l.batches *
+                        (state.products.find((p) => p.id === l.productId)
+                          ?.batchYield || 0)
+                      ).toLocaleString("ko-KR")}
+                      <small>개</small>
+                    </strong>
                   </div>
+                  <span className="recommendation-batches">
+                    {l.batches} ×{" "}
+                    {state.products.find((p) => p.id === l.productId)
+                      ?.batchLabel || "생산 단위"}
+                  </span>
+                  <p>{l.reason}</p>
                 </div>
               ))}
               {modal.questions.map((q, i) => (

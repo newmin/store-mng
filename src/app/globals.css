@@ -1538,15 +1538,54 @@ main {
 .recommendation {
   padding: 18px;
   background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 9px;
-  display: flex;
-  gap: 14px;
   margin-bottom: 15px;
 }
+.recommendation-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.recommendation-heading h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 18px;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.recommendation-heading svg {
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--color-primary);
+}
+.recommendation-heading strong {
+  margin-left: auto;
+  font-size: 28px;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+.recommendation-heading strong small {
+  display: inline;
+  font-size: 14px;
+  margin-left: 4px;
+}
+.recommendation-batches {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
 .recommendation p {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  margin-top: 12px;
 }
 .loading {
   display: flex;

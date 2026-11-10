@@ -5,7 +5,10 @@ import { daySchema } from "@/lib/types";
 import { fallbackCandidates, forecast, requirements } from "@/lib/calculations";
 import { addDays } from "@/lib/dates";
 import { validateRecommendations as check } from "@/lib/recommendations";
+import { recommendationState } from "@/lib/recommendation-context";
+import { createVoiceRequestLimit } from "@/lib/voice-request-limit";
 export const maxDuration = 60;
+const allowRequest = createVoiceRequestLimit();
 const suggestionSchema = z.object({
   lines: z
     .array(
@@ -20,11 +23,41 @@ const suggestionSchema = z.object({
 });
 export async function POST(req: Request) {
   try {
-    const ctx = await context(req);
-    const { date, version } = z
-      .object({ date: daySchema, version: z.number().int().nonnegative() })
-      .parse(await req.json());
-    const current = await readDocument(ctx);
+    const url = new URL(req.url);
+    const origin = req.headers.get("origin");
+    if (
+      !origin ||
+      new URL(origin).host !== (req.headers.get("host") || url.host)
+    )
+      throw new HttpError("매장 화면에서 추천을 시작해 주세요.", 403);
+    if (!req.headers.get("content-type")?.includes("application/json"))
+      throw new HttpError("추천 요청 형식을 확인해 주세요.", 415);
+    const shared = !!(
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+    const ctx = shared ? await context(req) : null;
+    const client =
+      ctx?.user.id ||
+      req.headers.get("x-real-ip") ||
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "local";
+    const raw = await req.text();
+    if (raw.length > 2000000)
+      throw new HttpError("추천 데이터가 너무 많습니다.", 413);
+    const { date, version, snapshot } = z
+      .object({
+        date: daySchema,
+        version: z.number().int().nonnegative(),
+        snapshot: z.unknown().optional(),
+      })
+      .parse(JSON.parse(raw));
+    const current = ctx
+      ? await readDocument(ctx)
+      : (() => {
+          const document = recommendationState(snapshot);
+          return { document, version: document.revision };
+        })();
     if (version !== current.version)
       throw new HttpError(
         "변경된 주문·재고를 새로고침한 뒤 추천받으세요.",
@@ -37,6 +70,11 @@ export async function POST(req: Request) {
       throw new HttpError(
         "AI 연결 전입니다. 수동 생산계획은 계속 사용할 수 있습니다.",
         503,
+      );
+    if (!allowRequest(client))
+      throw new HttpError(
+        "추천을 너무 자주 요청했어요. 잠시 후 다시 시도해 주세요.",
+        429,
       );
     const ai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,

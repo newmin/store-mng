@@ -576,7 +576,6 @@ export function PlanForm({
                 <div className="plan-editor-product">
                   {product && <RiceThumbnail product={product} />}
                   <label>
-                    메뉴
                     <select
                       aria-label={`생산 메뉴 ${index + 1}`}
                       value={line.productId}
@@ -599,6 +598,13 @@ export function PlanForm({
                           </option>
                         ))}
                     </select>
+                    {product && (
+                      <small className="muted">
+                        {product.batchYield
+                          ? `${product.batchLabel}당 ${product.batchYield}개`
+                          : "생산 기준 등록 필요"}
+                      </small>
+                    )}
                   </label>
                   <button
                     type="button"
@@ -613,7 +619,7 @@ export function PlanForm({
                 </div>
                 <div className="plan-editor-quantity">
                   <label>
-                    생산 단위 수
+                    <span>생산 단위 수</span>
                     <div className="plan-batch-input">
                       <input
                         aria-label={`생산 단위 수 ${index + 1}`}
@@ -635,13 +641,6 @@ export function PlanForm({
                       : "생산량 미등록"}
                   </strong>
                 </div>
-                {product && (
-                  <small className="muted">
-                    {product.batchYield
-                      ? `${product.batchLabel}당 ${product.batchYield}개 완성`
-                      : "메뉴의 생산 기준을 먼저 등록해 주세요."}
-                  </small>
-                )}
                 {line.reason && <p className="muted small">{line.reason}</p>}
               </div>
             );

@@ -1,5 +1,5 @@
 import { upgradeMenuCatalog } from "./catalog-upgrade";
-import { today } from "./dates";
+import { addDays, today } from "./dates";
 import { demoState } from "./state";
 import type { Order, StoreState } from "./types";
 
@@ -9,7 +9,7 @@ export function initializeDemoState(
   date = today(),
 ): StoreState {
   const initial = cached || { ...demoState(date), orders: [] };
-  const state = upgradeMenuCatalog(initial);
+  const state = initializeProductionDemo(upgradeMenuCatalog(initial), date);
   const month = date.slice(0, 7);
   if (state.demoSeededMonths?.includes(month)) return state;
   const products = state.products.filter((p) => p.active && !p.archived);
@@ -109,4 +109,125 @@ export function initializeDemoState(
   next.demoSeededMonths = [...(next.demoSeededMonths || []), month];
   next.revision++;
   return next;
+}
+
+// Fictional production assumptions for trying the agent, not shop recipes.
+function initializeProductionDemo(input: StoreState, date: string): StoreState {
+  if (input.demoProductionVersion === 1) return input;
+  const state = structuredClone(input);
+  const ingredients = [
+    ["rice", "멥쌀가루", 180000],
+    ["sticky", "찹쌀가루", 120000],
+    ["sugar", "설탕", 30000],
+    ["sesame", "참깨", 10000],
+    ["bean", "콩고물", 20000],
+    ["demo-filling", "앙금 · 체험용", 30000],
+    ["demo-flavor", "맛 재료 · 체험용", 30000],
+    ["demo-milk", "우유 · 체험용", 20000],
+    ["demo-butter", "버터 · 체험용", 15000],
+  ] as const;
+  for (const [id, name, stock] of ingredients) {
+    const existing = state.materials.find((m) => m.id === id);
+    if (existing) existing.stock = Math.max(existing.stock, stock);
+    else
+      state.materials.push({
+        id,
+        name,
+        stock,
+        unit: "g",
+        kind: "ingredient",
+        threshold: 3000,
+      });
+  }
+  for (const p of state.products.filter((p) => !p.archived)) {
+    p.batchYield ??= p.category === "general" ? 30 : 24;
+    if (!p.recipe.length) {
+      p.recipe =
+        p.category === "oven"
+          ? [
+              { materialId: "sticky", quantity: 1000 },
+              { materialId: "sugar", quantity: 180 },
+              { materialId: "demo-milk", quantity: 500 },
+              { materialId: "demo-butter", quantity: 120 },
+              { materialId: "demo-flavor", quantity: 150 },
+            ]
+          : [
+              {
+                materialId: p.category === "seolgi" ? "rice" : "sticky",
+                quantity: 1600,
+              },
+              { materialId: "sugar", quantity: 180 },
+              {
+                materialId:
+                  p.category === "seolgi" ? "demo-flavor" : "demo-filling",
+                quantity: 300,
+              },
+            ];
+    }
+  }
+  state.settings = {
+    initialized: true,
+    extraCount: 2,
+    extraBatches: 1,
+    avoidDays: 3,
+    excluded: [],
+  };
+  const products = state.products.filter((p) => p.active && !p.archived);
+  for (let days = 7; days >= 1; days--) {
+    const day = addDays(date, -days);
+    const id = `demo-production-${day}`;
+    const chosen = products.slice((7 - days) * 2, (7 - days) * 2 + 2);
+    const lines = chosen.map((p) => ({
+      productId: p.id,
+      batches: 1,
+      actualPieces: p.batchYield!,
+    }));
+    state.plans.push({
+      id,
+      date: day,
+      status: "completed",
+      lines,
+      sourceRevision: state.revision,
+      completedAt: `${day}T08:00:00+09:00`,
+      completedBy: "체험 사용자",
+      recipeSnapshot: structuredClone(chosen),
+    });
+    for (const p of chosen) {
+      const lotId = `${id}-${p.id}`;
+      const produced = p.batchYield!;
+      state.lots.push({
+        id: lotId,
+        productId: p.id,
+        date: day,
+        expires: addDays(day, p.shelfDays - 1),
+        produced,
+        remaining: 0,
+        planId: id,
+      });
+      state.closings.push({
+        id: `closing-${lotId}`,
+        date: day,
+        lotId,
+        remaining: 0,
+        waste: 2,
+        other: 0,
+        soldEstimate: produced - 2,
+        actor: "체험 사용자",
+        at: `${day}T19:00:00+09:00`,
+      });
+      for (const r of p.recipe)
+        state.movements.push({
+          id: `${lotId}-${r.materialId}`,
+          materialId: r.materialId,
+          delta: -r.quantity,
+          reason: "체험 생산 기록",
+          actor: "체험 사용자",
+          at: `${day}T08:00:00+09:00`,
+          planId: id,
+        });
+    }
+  }
+  state.demoProductionVersion = 1;
+  state.revision++;
+  return state;
 }

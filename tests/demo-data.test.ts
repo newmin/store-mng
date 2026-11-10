@@ -3,8 +3,63 @@ import { initializeDemoState } from "../src/lib/demo-data";
 import { demoState } from "../src/lib/state";
 import { orderSchema } from "../src/lib/types";
 import { orderMessage } from "../src/lib/order-message";
+import { fallbackCandidates, recipeIssue } from "../src/lib/calculations";
+import { validateRecommendations } from "../src/lib/recommendations";
+import {
+  recommendationContext,
+  recommendationState,
+} from "../src/lib/recommendation-context";
 
 describe("월별 체험 주문", () => {
+  it("모든 메뉴의 생산 기준과 최근 기록을 채우고 실제로 검증 가능한 추천 후보를 제공한다", () => {
+    for (const date of [
+      "2026-11-01",
+      "2026-11-11",
+      "2026-11-30",
+      "2028-02-29",
+    ]) {
+      const state = initializeDemoState(undefined, date);
+      expect(
+        state.products
+          .filter((p) => p.active)
+          .every((p) => !recipeIssue(p, state)),
+      ).toBe(true);
+      expect(state.plans).toHaveLength(7);
+      expect(state.closings).toHaveLength(14);
+      expect(state.movements.length).toBeGreaterThan(0);
+      const candidates = fallbackCandidates(state, date);
+      const lines = candidates
+        .slice(0, state.settings.extraCount)
+        .map((p) => ({
+          productId: p.id,
+          batches: state.settings.extraBatches,
+        }));
+      expect(lines).toHaveLength(2);
+      expect(validateRecommendations(state, date, lines)).toMatchObject({
+        valid: true,
+        errors: [],
+      });
+      const snapshot = recommendationContext(state, date);
+      expect(JSON.stringify(snapshot)).not.toContain("010-0000");
+      expect(snapshot.orders[0]).not.toHaveProperty("customer");
+      expect(snapshot).not.toHaveProperty("paymentAccount");
+      expect(
+        validateRecommendations(recommendationState(snapshot), date, lines),
+      ).toEqual(validateRecommendations(state, date, lines));
+    }
+  });
+
+  it("생산 샘플 보충은 한 번만 수행하고 이후 재고와 기준 편집을 유지한다", () => {
+    const state = initializeDemoState(undefined, "2026-11-11");
+    state.materials[0].stock = 1;
+    state.settings.extraCount = 0;
+    state.products[0].recipe = [];
+    const next = initializeDemoState(state, "2026-12-01");
+    expect(next.materials[0].stock).toBe(1);
+    expect(next.settings.extraCount).toBe(0);
+    expect(next.products[0].recipe).toEqual([]);
+    expect(next.plans).toEqual(state.plans);
+  });
   it("11월 전체에 하루 세 건씩 다양한 주문을 등록한다", () => {
     const state = initializeDemoState(undefined, "2026-11-08");
     expect(state.orders).toHaveLength(90);

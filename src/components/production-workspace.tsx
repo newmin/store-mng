@@ -2,6 +2,7 @@
 
 import {
   CheckCheck,
+  ChevronDown,
   CookingPot,
   Pencil,
   Plus,
@@ -81,20 +82,21 @@ export function ProductionWorkspace({
         ? "초안"
         : "작성 전";
 
-  function menuCard(product: Product, batches: number | undefined) {
+  function menuRow(product: Product, batches: number | undefined) {
     const row = req.find((r) => r.product.id === product.id);
     const issue = recipeIssue(product, state);
     const planned = lines.find((l) => l.productId === product.id);
     return (
-      <article className="production-menu" key={product.id}>
-        <div className="production-menu-main">
+      <details className="production-menu" key={product.id}>
+        <summary className="production-menu-main">
           <RiceThumbnail product={product} />
           <div className="production-menu-name">
             <h3>{product.name}</h3>
-            <span>
+            <span className={issue ? "production-menu-warning" : undefined}>
               {batches === undefined
-                ? "생산 기준 등록 필요"
+                ? issue || "생산 기준 등록 필요"
                 : `${number(batches)} × ${product.batchLabel}`}
+              {issue && batches !== undefined && ` · ${issue}`}
             </span>
           </div>
           <strong className="production-menu-quantity">
@@ -107,7 +109,8 @@ export function ProductionWorkspace({
               <small>계산 필요</small>
             )}
           </strong>
-        </div>
+          <ChevronDown className="production-menu-chevron" size={16} />
+        </summary>
         {issue && (
           <div className="production-menu-issue">
             <span>{issue}</span>
@@ -117,13 +120,7 @@ export function ProductionWorkspace({
           </div>
         )}
         {row && (
-          <details className="production-calculation">
-            <summary>
-              계산 근거{" "}
-              <span>
-                수령 대기 {number(row.pending)}개 · 가용 {number(row.carry)}개
-              </span>
-            </summary>
+          <div className="production-calculation">
             <dl>
               <div>
                 <dt>예약 전체</dt>
@@ -158,9 +155,9 @@ export function ProductionWorkspace({
                 </div>
               )}
             </dl>
-          </details>
+          </div>
         )}
-      </article>
+      </details>
     );
   }
 
@@ -177,6 +174,21 @@ export function ProductionWorkspace({
             </span>
           </div>
           <div className="button-row">
+            {!past && (
+              <button
+                className="button primary production-recommend-button"
+                disabled={thinking || busy}
+                aria-busy={thinking}
+                onClick={state.settings.initialized ? onRecommend : onSettings}
+              >
+                <Sparkles size={19} />
+                {thinking
+                  ? "AI 추천안 검증 중…"
+                  : state.settings.initialized
+                    ? "AI 메뉴 추천"
+                    : "AI 추천 기준 설정"}
+              </button>
+            )}
             {confirmed && !past && (
               <button
                 className="button secondary"
@@ -199,7 +211,7 @@ export function ProductionWorkspace({
                 </button>
               ) : (
                 <button
-                  className="button primary"
+                  className="button secondary"
                   disabled={busy || !state.products.length}
                   onClick={onEdit}
                 >
@@ -270,37 +282,34 @@ export function ProductionWorkspace({
       <div className="production-columns">
         <section className="production-task-list">
           <div className="production-section-heading">
-            <h2>{plan ? "만들 메뉴" : "생산이 필요한 메뉴"}</h2>
-            {!past && (
-              <button
-                className="text-button"
-                disabled={thinking || busy}
-                onClick={state.settings.initialized ? onRecommend : onSettings}
-              >
-                <Sparkles size={16} />
-                {thinking
-                  ? "추천안 검증 중…"
-                  : state.settings.initialized
-                    ? "추가 메뉴 추천"
-                    : "추천 기준 설정"}
-              </button>
-            )}
+            <h2>
+              {plan ? "만들 메뉴" : "생산이 필요한 메뉴"}
+              <span className="production-menu-count">{lines.length}종</span>
+            </h2>
           </div>
-          {lines.map((l) => {
-            const product = state.products.find((p) => p.id === l.productId);
-            return product && menuCard(product, l.batches);
-          })}
+          {!!lines.length && (
+            <div className="production-menu-list">
+              {lines.map((l) => {
+                const product = state.products.find(
+                  (p) => p.id === l.productId,
+                );
+                return product && menuRow(product, l.batches);
+              })}
+            </div>
+          )}
           {missing.length > 0 && (
             <div className="production-missing">
               <h3>
                 {plan ? "계획에 담기지 않은 메뉴" : "생산 기준을 확인할 메뉴"}
               </h3>
-              {missing.map((r) =>
-                menuCard(
-                  r.product,
-                  r.product.batchYield ? r.batches : undefined,
-                ),
-              )}
+              <div className="production-menu-list">
+                {missing.map((r) =>
+                  menuRow(
+                    r.product,
+                    r.product.batchYield ? r.batches : undefined,
+                  ),
+                )}
+              </div>
             </div>
           )}
           {!lines.length && !missing.length && (

@@ -9,7 +9,15 @@ export function initializeDemoState(
   date = today(),
 ): StoreState {
   const initial = cached || { ...demoState(date), orders: [] };
-  const state = initializeProductionDemo(upgradeMenuCatalog(initial), date);
+  const upgraded = initializeProductionDemo(upgradeMenuCatalog(initial), date);
+  const orders = upgraded.orders.map((order) =>
+    order.id.startsWith("demo-month-") && /\s*\(체험\)$/.test(order.customer)
+      ? { ...order, customer: order.customer.replace(/\s*\(체험\)$/, "") }
+      : order,
+  );
+  const state = orders.some((order, index) => order !== upgraded.orders[index])
+    ? { ...upgraded, orders }
+    : upgraded;
   const month = date.slice(0, 7);
   if (state.demoSeededMonths?.includes(month)) return state;
   const products = state.products.filter((p) => p.active && !p.archived);
@@ -56,7 +64,7 @@ export function initializeDemoState(
       const timestamp = `${orderDate}T${times[slot]}:00+09:00`;
       const order: Order = {
         id,
-        customer: `${names[index % names.length]} (체험)`,
+        customer: names[index % names.length],
         phone: `010-0000-${String(index + 100).padStart(4, "0")}`,
         date: orderDate,
         time: times[slot],

@@ -28,12 +28,10 @@ describe("월별 체험 주문", () => {
       expect(state.closings).toHaveLength(14);
       expect(state.movements.length).toBeGreaterThan(0);
       const candidates = fallbackCandidates(state, date);
-      const lines = candidates
-        .slice(0, state.settings.extraCount)
-        .map((p) => ({
-          productId: p.id,
-          batches: state.settings.extraBatches,
-        }));
+      const lines = candidates.slice(0, state.settings.extraCount).map((p) => ({
+        productId: p.id,
+        batches: state.settings.extraBatches,
+      }));
       expect(lines).toHaveLength(2);
       expect(validateRecommendations(state, date, lines)).toMatchObject({
         valid: true,
@@ -63,6 +61,9 @@ describe("월별 체험 주문", () => {
   it("11월 전체에 하루 세 건씩 다양한 주문을 등록한다", () => {
     const state = initializeDemoState(undefined, "2026-11-08");
     expect(state.orders).toHaveLength(90);
+    expect(
+      state.orders.every((order) => !order.customer.includes("(체험)")),
+    ).toBe(true);
     expect(new Set(state.orders.map((o) => o.id)).size).toBe(90);
     expect(new Set(state.orders.map((o) => o.date)).size).toBe(30);
     expect(
@@ -103,6 +104,25 @@ describe("월별 체험 주문", () => {
     expect(next).toBe(first);
     expect(next.orders).toHaveLength(94);
     expect(next.orders.at(-1)!.customer).toBe("수정한 고객");
+  });
+
+  it("이미 저장된 샘플 주문의 체험 표시를 제거하고 직접 입력한 고객명은 유지한다", () => {
+    const cached = initializeDemoState(undefined, "2026-11-08");
+    cached.orders[0].customer = "김민지 (체험)";
+    cached.orders[1].customer = "직접 수정한 고객";
+    cached.orders.push({
+      ...cached.orders[0],
+      id: "customer-order",
+      customer: "직접 입력 (체험)",
+    });
+    const original = structuredClone(cached);
+    const next = initializeDemoState(cached, "2026-11-08");
+    expect(next.orders[0].customer).toBe("김민지");
+    expect(next.orders[1].customer).toBe("직접 수정한 고객");
+    expect(next.orders.at(-1)!.customer).toBe("직접 입력 (체험)");
+    expect(next.orders).toHaveLength(cached.orders.length);
+    expect(cached).toEqual(original);
+    expect(initializeDemoState(next, "2026-11-08")).toBe(next);
   });
 
   it("월말과 윤년을 처리하고 다음 달 주문을 추가할 때 지난 기록을 보존한다", () => {

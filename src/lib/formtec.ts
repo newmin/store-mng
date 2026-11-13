@@ -52,6 +52,7 @@ export function formtecPlacement(
   paper: FormtecPaper,
   width: number,
   height: number,
+  roundImage = false,
 ) {
   if (
     !Number.isFinite(width) ||
@@ -62,9 +63,10 @@ export function formtecPlacement(
     throw new Error("올바른 스티커 이미지가 필요합니다.");
   const spec = formtecPapers[paper];
   // Inscribe the entire image in a round label so text at its corners survives cutting.
-  const scale = spec.round
-    ? spec.width / Math.hypot(width, height)
-    : Math.min(spec.width / width, spec.height / height);
+  const scale =
+    spec.round && !roundImage
+      ? spec.width / Math.hypot(width, height)
+      : Math.min(spec.width / width, spec.height / height);
   return {
     x: (spec.width - width * scale) / 2,
     y: (spec.height - height * scale) / 2,
@@ -74,7 +76,11 @@ export function formtecPlacement(
 }
 
 /** Build a single-page DGF with one embedded PNG object per occupied label. */
-export function makeFormtecDesign(png: Uint8Array, paper: FormtecPaper) {
+export function makeFormtecDesign(
+  png: Uint8Array,
+  paper: FormtecPaper,
+  roundImage = false,
+) {
   if (
     png.length < 33 ||
     ![137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => png[i] === v)
@@ -85,6 +91,7 @@ export function makeFormtecDesign(png: Uint8Array, paper: FormtecPaper) {
     paper,
     dimensions.getUint32(16),
     dimensions.getUint32(20),
+    roundImage,
   );
   const object = decode(formtecImageHeader);
   // Two-byte stream version, two-byte object type, then x/y/width/height in mm.
@@ -116,8 +123,12 @@ function crc32(bytes: Uint8Array) {
 }
 
 /** DGZ is a ZIP container. Store one ASCII-named DGF, with no external image paths. */
-export function makeFormtecFile(png: Uint8Array, paper: FormtecPaper) {
-  const data = makeFormtecDesign(png, paper);
+export function makeFormtecFile(
+  png: Uint8Array,
+  paper: FormtecPaper,
+  roundImage = false,
+) {
+  const data = makeFormtecDesign(png, paper, roundImage);
   const name = new TextEncoder().encode("Design/sticker.dgf");
   const local = new Uint8Array(30);
   const central = new Uint8Array(46);

@@ -12,22 +12,19 @@ import {
   ImagePlus,
   Plus,
   RectangleHorizontal,
-  Square,
+  Circle,
   X,
   StickyNote,
 } from "lucide-react";
 import { uid } from "@/lib/dates";
-import {
-  formtecPapers,
-  makeFormtecFile,
-  type FormtecPaper,
-} from "@/lib/formtec";
+import { formtecPapers, makeFormtecFile } from "@/lib/formtec";
 import { resolveMenuImage, uploadMenuImage } from "@/lib/menu-image-client";
 import {
   drawSticker,
   stickerImages,
   MAX_STICKER_IMAGES,
   type StickerImage,
+  stickerPaper,
   collectStickerTags,
   newStickerTemplate,
   stickerTemplates,
@@ -142,7 +139,11 @@ function TemplateCard({
         onClick={onEdit}
       >
         <span className="sticker-sample">
-          <canvas ref={canvas} aria-hidden="true" />
+          <canvas
+            ref={canvas}
+            data-shape={stickerPaper(design.shape).shape}
+            aria-hidden="true"
+          />
         </span>
         <span className="sticker-template-name">{design.name}</span>
       </button>
@@ -197,7 +198,7 @@ export function StickerWorkspace({
   const [selectedImageId, setSelectedImageId] = useState("legacy");
   const [panelOpen, setPanelOpen] = useState(false),
     [overflow, setOverflow] = useState(false);
-  const [paper, setPaper] = useState<FormtecPaper>("3106");
+  const paper = stickerPaper(design.shape).code;
   const canvas = useRef<HTMLCanvasElement>(null),
     canvasArea = useRef<HTMLDivElement>(null);
   const adjustment = useRef<HTMLElement>(null);
@@ -578,7 +579,7 @@ export function StickerWorkspace({
     setWorking(true);
     try {
       const png = new Uint8Array(await (await makePng()).arrayBuffer());
-      const file = makeFormtecFile(png, paper);
+      const file = makeFormtecFile(png, paper, paper === "3639");
       const url = URL.createObjectURL(
         new Blob([file], { type: "application/zip" }),
       );
@@ -792,17 +793,6 @@ export function StickerWorkspace({
                   <ImagePlus size={16} />
                   사진 추가
                 </button>
-                {image && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelected("imageBox");
-                      setPanelOpen(true);
-                    }}
-                  >
-                    사진 편집
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -847,6 +837,7 @@ export function StickerWorkspace({
               <div ref={canvasArea} className="sticker-canvas">
                 <canvas
                   ref={canvas}
+                  data-shape={stickerPaper(design.shape).shape}
                   aria-label="스티커 디자인 미리보기"
                   onPointerDown={pointerDown}
                   onPointerMove={movePointer}
@@ -1034,15 +1025,23 @@ export function StickerWorkspace({
                       </button>
                       <button
                         type="button"
-                        aria-label="정사각형"
-                        title="정사각형"
-                        aria-pressed={design.shape === "square"}
-                        onClick={() => patch({ shape: "square" })}
+                        aria-label="원형"
+                        title="원형"
+                        aria-pressed={
+                          stickerPaper(design.shape).shape === "circle"
+                        }
+                        onClick={() => patch({ shape: "circle" })}
                       >
-                        <Square size={22} aria-hidden="true" />
+                        <Circle size={22} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
+                  <label>
+                    용지
+                    <output aria-label="선택된 용지">
+                      {stickerPaper(design.shape).name}
+                    </output>
+                  </label>
                   {orderMode && (
                     <label>
                       보관 기간
@@ -1105,25 +1104,6 @@ export function StickerWorkspace({
               </div>
               {orderMode && (
                 <fieldset disabled={working}>
-                  <label>
-                    폼텍 용지
-                    <select
-                      aria-label="폼텍 용지"
-                      value={paper}
-                      onChange={(e) => setPaper(e.target.value as FormtecPaper)}
-                    >
-                      {Object.entries(formtecPapers).map(([code, spec]) => (
-                        <option key={code} value={code}>
-                          {spec.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {paper === "3639" && (
-                    <small>
-                      내용이 잘리지 않도록 이미지 전체를 원 안에 맞춥니다.
-                    </small>
-                  )}
                   <button
                     className="button secondary"
                     disabled={working || overflow || !ready}

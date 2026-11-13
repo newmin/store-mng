@@ -76,7 +76,8 @@ export const stickerDesignSchema = z.object({
     .refine((path) => isUploadedMenuImage(path) || isStickerSampleImage(path))
     .optional(),
   text: z.string().max(2000),
-  shape: z.enum(["wide", "square"]),
+  // Keep accepting the former square value in saved designs as a round label.
+  shape: z.enum(["wide", "circle", "square"]),
   imageBox: position,
   imageAspectLocked: z.boolean().optional(),
   imageStretch: z.boolean().optional(),
@@ -117,6 +118,23 @@ export function stickerImages(
     : [];
 }
 export type StickerBox = StickerDesign["imageBox"];
+export function stickerPaper(shape: StickerDesign["shape"]) {
+  return shape === "wide"
+    ? {
+        code: "3106" as const,
+        shape: "wide" as const,
+        name: "폼텍 3106",
+        width: 900,
+        height: 500,
+      }
+    : {
+        code: "3639" as const,
+        shape: "circle" as const,
+        name: "폼텍 3639",
+        width: 900,
+        height: 900,
+      };
+}
 export function isOrderSticker(design: StickerDesign) {
   return design.kind === "order" || (!design.kind && !!design.orderId);
 }
@@ -237,7 +255,7 @@ export function fitStickerImageBox(
   naturalHeight: number,
   shape: StickerDesign["shape"],
 ): StickerBox {
-  const height = shape === "square" ? 900 : 500;
+  const { height } = stickerPaper(shape);
   const ratio = Math.min(
     (box.width * 9) / naturalWidth,
     (box.height * height) / 100 / naturalHeight,
@@ -305,7 +323,7 @@ export function stickerTemplates(state: StoreState) {
   ];
 }
 
-// Preview and PNG use the same renderer; no physical label dimensions are assumed.
+// Preview and PNG share the label shape; physical sheet printing is separate.
 export function drawSticker(
   canvas: HTMLCanvasElement,
   design: StickerDesign,
@@ -313,11 +331,18 @@ export function drawSticker(
   selected?: "imageBox" | "textBox",
   selectedImageId?: string,
 ) {
-  canvas.width = 900;
-  canvas.height = design.shape === "square" ? 900 : 500;
+  const paper = stickerPaper(design.shape);
+  canvas.width = paper.width;
+  canvas.height = paper.height;
   const ctx = canvas.getContext("2d")!;
   const w = canvas.width,
     h = canvas.height;
+  ctx.save();
+  if (paper.shape === "circle") {
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, w / 2, 0, Math.PI * 2);
+    ctx.clip();
+  }
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, w, h);
   const box = (b: StickerBox) => ({
@@ -380,6 +405,7 @@ export function drawSticker(
         ? b.width
         : 0);
   lines.forEach((line, i) => ctx.fillText(line, x, start + i * lineHeight));
+  ctx.restore();
   ctx.restore();
   if (selected) {
     const r = box(

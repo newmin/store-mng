@@ -18,6 +18,7 @@ import {
   stickerExpiresAt,
   stickerTemplates,
   newStickerTemplate,
+  stickerPaper,
 } from "../src/lib/stickers";
 
 const asset = {
@@ -123,6 +124,73 @@ describe("sticker library and drafts", () => {
     );
     expect(drawImage.mock.calls.map((call) => call[0])).toEqual([b, a]);
   });
+  it("keeps paper selection tied to shape across saving and template reuse", () => {
+    for (const shape of ["wide", "circle", "square"] as const) {
+      const template = { ...newStickerTemplate("shape-template"), shape };
+      const saved = applyCommand(
+        demoState(),
+        { type: "saveStickerDesign", design: template },
+        "test",
+      );
+      const restored = saved.stickerDesigns![0];
+      const order = orderFromTemplate(restored, "shape-order");
+      expect(stickerPaper(order.shape).name).toBe(
+        shape === "wide" ? "폼텍 3106" : "폼텍 3639",
+      );
+      expect(stickerPaper(order.shape).shape).toBe(
+        shape === "wide" ? "wide" : "circle",
+      );
+      expect(order.shape).toBe(shape);
+      const fitted = fitStickerImageBox(order.imageBox, 100, 100, shape);
+      const paper = stickerPaper(shape);
+      expect(fitted.width * paper.width).toBeCloseTo(
+        fitted.height * paper.height,
+      );
+    }
+  });
+
+  it.each(["wide", "circle", "square"] as const)(
+    "renders %s with the same shape for previews and copied images",
+    (shape) => {
+      const ctx = {
+        save: vi.fn(),
+        restore: vi.fn(),
+        beginPath: vi.fn(),
+        arc: vi.fn(),
+        clip: vi.fn(),
+        fillRect: vi.fn(),
+        rect: vi.fn(),
+        fillText: vi.fn(),
+        drawImage: vi.fn(),
+        measureText: vi.fn(() => ({ width: 10 })),
+      };
+      const canvas = { width: 0, height: 0, getContext: () => ctx };
+      const image = { naturalWidth: 100, naturalHeight: 100 };
+      drawSticker(
+        canvas as unknown as HTMLCanvasElement,
+        {
+          ...newStickerDesign("render"),
+          shape,
+          text: "감사합니다",
+          image: "/stickers/flowers.png",
+        },
+        { "/stickers/flowers.png": image as HTMLImageElement },
+      );
+      expect(canvas.width).toBe(900);
+      expect(canvas.height).toBe(shape === "wide" ? 500 : 900);
+      if (shape === "wide") expect(ctx.arc).not.toHaveBeenCalled();
+      else {
+        expect(ctx.arc).toHaveBeenCalledWith(450, 450, 450, 0, Math.PI * 2);
+        expect(ctx.clip.mock.invocationCallOrder[0]).toBeLessThan(
+          ctx.fillRect.mock.invocationCallOrder[0],
+        );
+        expect(ctx.clip.mock.invocationCallOrder[0]).toBeLessThan(
+          ctx.drawImage.mock.invocationCallOrder[0],
+        );
+      }
+      expect(ctx.restore).toHaveBeenCalledTimes(ctx.save.mock.calls.length);
+    },
+  );
   it("edits each sample in place and creates independent stickers from it", () => {
     let s = demoState();
     const templates = stickerTemplates(s);

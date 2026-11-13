@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { CSSProperties } from "react";
 import { themeVariables } from "@/lib/theme";
 import { brand } from "@/lib/brand";
+import { AppUpdateChecker } from "@/components/app-update-checker";
 import "./globals.css";
 import "./order-pickers.css";
 import "./brand.css";
@@ -27,7 +28,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko" style={themeVariables() as CSSProperties}>
-      <body>{children}</body>
+      <body>
+        <AppUpdateChecker />
+        {children}
+      </body>
     </html>
   );
 }

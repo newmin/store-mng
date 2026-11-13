@@ -243,6 +243,10 @@
   width: fit-content;
   max-width: 100%;
 }
+.sticker-preview canvas[data-shape="circle"],
+.sticker-sample canvas[data-shape="circle"] {
+  border-radius: 50%;
+}
 .sticker-resize-handle {
   position: absolute;
   transform: translate(-50%, -50%);

@@ -30,6 +30,14 @@ const png = Buffer.from(
 );
 
 describe("Formtec DGZ export", () => {
+  it("exports a round PNG at the full label diameter without shrinking it again", () => {
+    const data = unzip(Buffer.from(makeFormtecFile(png, "3639", true)));
+    const offset = Buffer.from(formtecHeaders["3639"], "base64").length + 8;
+    expect(extended(data, offset + 4)).toBe(0);
+    expect(extended(data, offset + 14)).toBe(0);
+    expect(extended(data, offset + 24)).toBe(38);
+    expect(extended(data, offset + 34)).toBe(38);
+  });
   for (const paper of Object.keys(formtecPapers) as FormtecPaper[]) {
     it(`keeps the original ${paper} paper settings and embeds an identical PNG in every label`, () => {
       const header = Buffer.from(formtecHeaders[paper], "base64");

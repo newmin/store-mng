@@ -4,6 +4,7 @@ import type { StoreState } from "./types";
 
 const key = z.string().min(1).max(100);
 export const MAX_STICKER_DAYS = 30;
+export const MAX_STICKER_IMAGES = 12;
 const DAY_MS = 86_400_000;
 export function isStickerSampleImage(path: string) {
   return path === "/stickers/flowers.png" || path === "/stickers/brush.png";
@@ -48,6 +49,17 @@ const position = z
     (b) => b.x + b.width <= 100 && b.y + b.height <= 100,
     "배치 영역이 스티커를 벗어났습니다.",
   );
+const stickerImagePath = z
+  .string()
+  .max(200)
+  .refine((path) => isUploadedMenuImage(path) || isStickerSampleImage(path));
+const stickerImageSchema = z.object({
+  id: key,
+  image: stickerImagePath,
+  box: position,
+  aspectLocked: z.boolean().optional(),
+  stretch: z.boolean().optional(),
+});
 export const stickerDesignSchema = z.object({
   id: key,
   name: z.string().trim().min(1).max(80),
@@ -68,6 +80,14 @@ export const stickerDesignSchema = z.object({
   imageBox: position,
   imageAspectLocked: z.boolean().optional(),
   imageStretch: z.boolean().optional(),
+  images: z
+    .array(stickerImageSchema)
+    .max(MAX_STICKER_IMAGES)
+    .refine(
+      (items) => new Set(items.map((item) => item.id)).size === items.length,
+      "사진 ID가 중복되었습니다.",
+    )
+    .optional(),
   textBox: position,
   font: z.enum(["sans", "serif", "mono"]),
   fontSize: z.number().int().min(12).max(100),
@@ -77,6 +97,25 @@ export const stickerDesignSchema = z.object({
 });
 export type StickerAsset = z.infer<typeof stickerAssetSchema>;
 export type StickerDesign = z.infer<typeof stickerDesignSchema>;
+export type StickerImage = z.infer<typeof stickerImageSchema>;
+export function stickerImages(
+  design: StickerDesign,
+  fallbackImage?: string,
+): StickerImage[] {
+  if (design.images) return design.images;
+  const image = design.image || fallbackImage;
+  return image
+    ? [
+        {
+          id: "legacy",
+          image,
+          box: design.imageBox,
+          aspectLocked: design.imageAspectLocked,
+          stretch: design.imageStretch,
+        },
+      ]
+    : [];
+}
 export type StickerBox = StickerDesign["imageBox"];
 export function isOrderSticker(design: StickerDesign) {
   return design.kind === "order" || (!design.kind && !!design.orderId);
@@ -270,8 +309,9 @@ export function stickerTemplates(state: StoreState) {
 export function drawSticker(
   canvas: HTMLCanvasElement,
   design: StickerDesign,
-  image: HTMLImageElement | null,
+  images: Record<string, HTMLImageElement>,
   selected?: "imageBox" | "textBox",
+  selectedImageId?: string,
 ) {
   canvas.width = 900;
   canvas.height = design.shape === "square" ? 900 : 500;
@@ -286,15 +326,17 @@ export function drawSticker(
     width: (b.width * w) / 100,
     height: (b.height * h) / 100,
   });
-  if (image) {
-    const b = box(design.imageBox);
+  for (const layer of stickerImages(design)) {
+    const image = images[layer.image];
+    if (!image) continue;
+    const b = box(layer.box);
     const ratio = Math.min(
       b.width / image.naturalWidth,
       b.height / image.naturalHeight,
     );
     const iw = image.naturalWidth * ratio,
       ih = image.naturalHeight * ratio;
-    if (design.imageStretch) ctx.drawImage(image, b.x, b.y, b.width, b.height);
+    if (layer.stretch) ctx.drawImage(image, b.x, b.y, b.width, b.height);
     else
       ctx.drawImage(
         image,
@@ -340,7 +382,12 @@ export function drawSticker(
   lines.forEach((line, i) => ctx.fillText(line, x, start + i * lineHeight));
   ctx.restore();
   if (selected) {
-    const r = box(design[selected]);
+    const r = box(
+      selected === "imageBox"
+        ? stickerImages(design).find((layer) => layer.id === selectedImageId)
+            ?.box || design.imageBox
+        : design.textBox,
+    );
     ctx.strokeStyle = getComputedStyle(canvas)
       .getPropertyValue("--color-primary")
       .trim();

@@ -4,7 +4,11 @@ import { commandSchema } from "@/lib/types";
 import { applyCommand } from "@/lib/state";
 import { findMenuPhoto } from "@/lib/menu-catalog";
 import { menuImageBelongsToShop } from "@/lib/menu-image";
-import { pruneStickerWork, isStickerSampleImage } from "@/lib/stickers";
+import {
+  pruneStickerWork,
+  isStickerSampleImage,
+  stickerImages,
+} from "@/lib/stickers";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
@@ -65,9 +69,15 @@ export async function POST(req: Request) {
       throw new HttpError("해당 매장의 스티커 그림이 아닙니다.", 403);
     if (
       body.command.type === "saveStickerDesign" &&
-      body.command.design.image &&
-      !isStickerSampleImage(body.command.design.image) &&
-      !menuImageBelongsToShop(body.command.design.image, ctx.shopId)
+      [
+        body.command.design.image,
+        ...stickerImages(body.command.design).map((layer) => layer.image),
+      ].some(
+        (image) =>
+          image &&
+          !isStickerSampleImage(image) &&
+          !menuImageBelongsToShop(image, ctx.shopId),
+      )
     )
       throw new HttpError("해당 매장의 스티커 그림이 아닙니다.", 403);
     const productImage =

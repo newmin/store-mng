@@ -2,6 +2,33 @@
   display: grid;
   gap: 20px;
 }
+.sticker-photo-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.sticker-photo-list button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+.sticker-photo-list button[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.sticker-photo-list img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
 .sticker-tabs,
 .sticker-chips,
 .sticker-tag-input {

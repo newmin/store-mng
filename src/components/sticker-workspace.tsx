@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import {
   AlignLeft,
   AlignCenter,
@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Clock3,
   Copy,
+  Download,
   Files,
   ImagePlus,
   Plus,
@@ -16,9 +17,17 @@ import {
   StickyNote,
 } from "lucide-react";
 import { uid } from "@/lib/dates";
+import {
+  formtecPapers,
+  makeFormtecFile,
+  type FormtecPaper,
+} from "@/lib/formtec";
 import { resolveMenuImage, uploadMenuImage } from "@/lib/menu-image-client";
 import {
   drawSticker,
+  stickerImages,
+  MAX_STICKER_IMAGES,
+  type StickerImage,
   collectStickerTags,
   newStickerTemplate,
   stickerTemplates,
@@ -42,44 +51,62 @@ const expiryFormat = new Intl.DateTimeFormat("ko-KR", {
   hour: "2-digit",
   minute: "2-digit",
 });
-function useArtwork(path?: string) {
+function useArtworks(layers: StickerImage[]) {
+  const paths = JSON.stringify([
+    ...new Set(layers.map((layer) => layer.image)),
+  ]);
   const [loaded, setLoaded] = useState<{
-    path: string;
-    image: HTMLImageElement;
+    paths: string;
+    images: Record<string, HTMLImageElement>;
+    error: string;
   } | null>(null);
-  const [error, setError] = useState("");
   useEffect(() => {
     let alive = true;
-    setError("");
-    if (!path) return;
+    const images: Record<string, HTMLImageElement> = {};
     async function load() {
-      try {
-        const url = isStickerSampleImage(path!)
-          ? path!
-          : await resolveMenuImage(path!);
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("그림을 불러오지 못했습니다.");
-        const blob = await response.blob();
-        const data = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
+      const results = await Promise.allSettled(
+        (JSON.parse(paths) as string[]).map(async (path) => {
+          const url = isStickerSampleImage(path)
+            ? path
+            : await resolveMenuImage(path);
+          const response = await fetch(url);
+          if (!response.ok) throw new Error("그림을 불러오지 못했습니다.");
+          const blob = await response.blob();
+          const data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          const image = new Image();
+          image.src = data;
+          await image.decode();
+          images[path] = image;
+        }),
+      );
+      if (alive)
+        setLoaded({
+          paths,
+          images,
+          error: results.some((r) => r.status === "rejected")
+            ? "일부 사진을 불러오지 못했습니다. 다시 열어 주세요."
+            : "",
         });
-        const image = new Image();
-        image.src = data;
-        await image.decode();
-        if (alive) setLoaded({ path: path!, image });
-      } catch {
-        if (alive) setError("그림을 불러오지 못했습니다. 다시 시도해 주세요.");
-      }
     }
     void load();
     return () => {
       alive = false;
     };
-  }, [path]);
-  return { image: loaded && loaded.path === path ? loaded.image : null, error };
+  }, [paths]);
+  const images = useMemo(
+    () => (loaded?.paths === paths ? loaded.images : {}),
+    [loaded, paths],
+  );
+  return {
+    images,
+    error: loaded?.paths === paths ? loaded.error : "",
+    ready: layers.every((layer) => !!images[layer.image]),
+  };
 }
 
 function TemplateCard({
@@ -92,16 +119,21 @@ function TemplateCard({
   onEdit: () => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const { image, error } = useArtwork(imagePath);
+  const renderDesign = useMemo(
+    () => ({ ...design, image: design.image || imagePath }),
+    [design, imagePath],
+  );
+  const { images, error } = useArtworks(stickerImages(renderDesign));
   useEffect(() => {
     let active = true;
     void document.fonts.ready.then(() => {
-      if (active && canvas.current) drawSticker(canvas.current, design, image);
+      if (active && canvas.current)
+        drawSticker(canvas.current, renderDesign, images);
     });
     return () => {
       active = false;
     };
-  }, [design, image]);
+  }, [renderDesign, images]);
   return (
     <article className="sticker-template-card">
       <button
@@ -162,8 +194,10 @@ export function StickerWorkspace({
   const [query, setQuery] = useState(""),
     [tag, setTag] = useState("");
   const [selected, setSelected] = useState<"imageBox" | "textBox">("textBox");
+  const [selectedImageId, setSelectedImageId] = useState("legacy");
   const [panelOpen, setPanelOpen] = useState(false),
     [overflow, setOverflow] = useState(false);
+  const [paper, setPaper] = useState<FormtecPaper>("3106");
   const canvas = useRef<HTMLCanvasElement>(null),
     canvasArea = useRef<HTMLDivElement>(null);
   const adjustment = useRef<HTMLElement>(null);
@@ -176,11 +210,24 @@ export function StickerWorkspace({
     y: number;
     box: StickerDesign["textBox"];
     layer: "imageBox" | "textBox";
+    imageId?: string;
     mode: "move" | "resize";
   } | null>(null);
   const assets = state.stickerAssets || [];
   const artwork = assets.find((a) => a.id === design.assetId);
-  const { image, error } = useArtwork(design.image || artwork?.image);
+  const renderDesign = useMemo(
+    () => ({ ...design, image: design.image || artwork?.image }),
+    [design, artwork?.image],
+  );
+  const layers = stickerImages(renderDesign);
+  const selectedPhoto =
+    layers.find((layer) => layer.id === selectedImageId) || layers[0];
+  const selectedBox =
+    selected === "imageBox" && selectedPhoto
+      ? selectedPhoto.box
+      : design.textBox;
+  const { images, error, ready } = useArtworks(layers);
+  const image = selectedPhoto ? images[selectedPhoto.image] : undefined;
   const designs = state.stickerDesigns || [];
   const orders = designs
     .filter(isOrderSticker)
@@ -246,16 +293,24 @@ export function StickerWorkspace({
         setOverflow(
           drawSticker(
             canvas.current,
-            design,
-            image,
+            renderDesign,
+            images,
             panelOpen ? selected : undefined,
+            selectedPhoto?.id,
           ),
         );
     });
     return () => {
       active = false;
     };
-  }, [design, image, selected, panelOpen, editorActive]);
+  }, [
+    renderDesign,
+    images,
+    selected,
+    selectedPhoto?.id,
+    panelOpen,
+    editorActive,
+  ]);
   useEffect(() => {
     if (!panelOpen) return;
     const close = (e: KeyboardEvent) => {
@@ -280,7 +335,34 @@ export function StickerWorkspace({
     };
   }, [panelOpen]);
   function patch(value: Partial<StickerDesign>) {
-    setDesign((d) => ({ ...d, ...value }));
+    setDesign((d) => {
+      const { imageBox, imageAspectLocked, imageStretch, ...rest } = value;
+      if (
+        imageBox ||
+        imageAspectLocked !== undefined ||
+        imageStretch !== undefined
+      ) {
+        return {
+          ...d,
+          ...rest,
+          images: stickerImages(d, artwork?.image).map((layer) =>
+            layer.id === selectedPhoto?.id
+              ? {
+                  ...layer,
+                  ...(imageBox ? { box: imageBox } : {}),
+                  ...(imageAspectLocked !== undefined
+                    ? { aspectLocked: imageAspectLocked }
+                    : {}),
+                  ...(imageStretch !== undefined
+                    ? { stretch: imageStretch }
+                    : {}),
+                }
+              : layer,
+          ),
+        };
+      }
+      return { ...d, ...value };
+    });
     setDirty(true);
   }
   function discard() {
@@ -289,6 +371,10 @@ export function StickerWorkspace({
   function loadDesign(saved: StickerDesign, existingOrder = false) {
     if (!discard()) return false;
     setDesign(structuredClone(saved));
+    setSelectedImageId(
+      stickerImages(saved, assets.find((a) => a.id === saved.assetId)?.image)[0]
+        ?.id || "legacy",
+    );
     setSavedOrder(existingOrder);
     setEditorActive(true);
     setDirty(false);
@@ -350,22 +436,64 @@ export function StickerWorkspace({
       setNotice((e as Error).message);
     }
   }
-  async function attachPhoto(file?: File) {
-    if (!file) return;
+  async function attachPhotos(files: File[]) {
+    if (!files.length) return;
+    if (layers.length + files.length > MAX_STICKER_IMAGES) {
+      setNotice(`사진은 ${MAX_STICKER_IMAGES}장까지 추가할 수 있습니다.`);
+      return;
+    }
     setWorking(true);
+    setNotice("");
+    const added: StickerImage[] = [];
     try {
-      const image = await uploadMenuImage(file);
-      patch({
-        image,
-        assetId: undefined,
-        imageAspectLocked: true,
-        imageStretch: false,
-      });
+      for (const file of files) {
+        const path = await uploadMenuImage(file);
+        const index = layers.length + added.length;
+        added.push({
+          id: uid(),
+          image: path,
+          box: {
+            x: 5 + (index % 4) * 12,
+            y: 10 + (index % 4) * 10,
+            width: 30,
+            height: 55,
+          },
+          aspectLocked: true,
+          stretch: false,
+        });
+      }
     } catch (e) {
       setNotice((e as Error).message);
     } finally {
+      if (added.length) {
+        patch({
+          images: [...layers, ...added],
+          assetId: undefined,
+          image: undefined,
+        });
+        setSelectedImageId(added[added.length - 1].id);
+        setSelected("imageBox");
+        setPanelOpen(true);
+      }
       setWorking(false);
     }
+  }
+  function removePhoto() {
+    const remaining = layers.filter((layer) => layer.id !== selectedPhoto?.id);
+    patch({ images: remaining, image: undefined, assetId: undefined });
+    setSelectedImageId(remaining[remaining.length - 1]?.id || "");
+    if (!remaining.length) {
+      setSelected("textBox");
+      setPanelOpen(false);
+    }
+  }
+  function reorderPhoto(direction: number) {
+    const index = layers.findIndex((layer) => layer.id === selectedPhoto?.id);
+    const next = index + direction;
+    if (index < 0 || next < 0 || next >= layers.length) return;
+    const reordered = [...layers];
+    [reordered[index], reordered[next]] = [reordered[next], reordered[index]];
+    patch({ images: reordered, image: undefined, assetId: undefined });
   }
   async function saveDesign() {
     if (savedOrder && !persisted) return;
@@ -406,10 +534,9 @@ export function StickerWorkspace({
   }
   async function makePng() {
     await document.fonts.ready;
-    if ((design.assetId || design.image) && !image)
-      throw new Error("그림을 불러온 뒤 다시 시도해 주세요.");
+    if (!ready) throw new Error("그림을 불러온 뒤 다시 시도해 주세요.");
     const output = document.createElement("canvas");
-    if (drawSticker(output, design, image))
+    if (drawSticker(output, renderDesign, images))
       throw new Error(
         "문구가 영역을 넘었습니다. 글자 크기나 문구 영역을 조절해 주세요.",
       );
@@ -445,35 +572,63 @@ export function StickerWorkspace({
       setWorking(false);
     }
   }
+  async function downloadFormtec() {
+    setNotice("");
+    setSuccess("");
+    setWorking(true);
+    try {
+      const png = new Uint8Array(await (await makePng()).arrayBuffer());
+      const file = makeFormtecFile(png, paper);
+      const url = URL.createObjectURL(
+        new Blob([file], { type: "application/zip" }),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${design.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").trim() || "스티커"}_폼텍${paper}_${formtecPapers[paper].count}개.dgz`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setSuccess("폼텍 파일을 다운로드했습니다.");
+    } catch (e) {
+      setNotice(
+        e instanceof Error ? e.message : "폼텍 파일을 만들지 못했습니다.",
+      );
+    } finally {
+      setWorking(false);
+    }
+  }
   function pointerDown(e: PointerEvent<HTMLCanvasElement>) {
     if (e.button !== 0) return;
     const r = e.currentTarget.getBoundingClientRect(),
       x = ((e.clientX - r.left) / r.width) * 100,
       y = ((e.clientY - r.top) / r.height) * 100;
-    const hit = (
-      [selected, selected === "textBox" ? "imageBox" : "textBox"] as const
-    ).find((key) => {
-      const b = design[key];
-      return (
-        (key !== "imageBox" || image) &&
-        x >= b.x &&
-        x <= b.x + b.width &&
-        y >= b.y &&
-        y <= b.y + b.height
-      );
-    });
+    const contains = (b: StickerDesign["textBox"]) =>
+      x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height;
+    const photo = [...layers].reverse().find((layer) => contains(layer.box));
+    const preferText =
+      panelOpen && selected === "textBox" && contains(design.textBox);
+    const hit = preferText
+      ? "textBox"
+      : photo
+        ? "imageBox"
+        : contains(design.textBox)
+          ? "textBox"
+          : null;
     if (!hit) {
       setPanelOpen(false);
       return;
     }
+    if (photo && hit === "imageBox") setSelectedImageId(photo.id);
     setSelected(hit);
     setPanelOpen(true);
     drag.current = {
       id: e.pointerId,
       x: e.clientX,
       y: e.clientY,
-      box: design[hit],
+      box: hit === "imageBox" && photo ? photo.box : design.textBox,
       layer: hit,
+      imageId: hit === "imageBox" ? photo?.id : undefined,
       mode: "move",
     };
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -484,17 +639,25 @@ export function StickerWorkspace({
     if (!d || d.id !== e.pointerId || !r) return;
     const dx = ((e.clientX - d.x) / r.width) * 100,
       dy = ((e.clientY - d.y) / r.height) * 100;
-    patch({
-      [d.layer]:
-        d.mode === "resize"
-          ? resizeStickerBox(
-              d.box,
-              dx,
-              dy,
-              d.layer === "imageBox" && design.imageAspectLocked !== false,
-            )
-          : stickerBox({ ...d.box, x: d.box.x + dx, y: d.box.y + dy }),
-    });
+    const targetPhoto = layers.find((layer) => layer.id === d.imageId);
+    const box =
+      d.mode === "resize"
+        ? resizeStickerBox(
+            d.box,
+            dx,
+            dy,
+            d.layer === "imageBox" && targetPhoto?.aspectLocked !== false,
+          )
+        : stickerBox({ ...d.box, x: d.box.x + dx, y: d.box.y + dy });
+    patch(
+      d.layer === "imageBox"
+        ? {
+            images: layers.map((layer) =>
+              layer.id === d.imageId ? { ...layer, box } : layer,
+            ),
+          }
+        : { textBox: box },
+    );
   }
 
   return (
@@ -570,12 +733,13 @@ export function StickerWorkspace({
             ref={photoInput}
             type="file"
             accept="image/png,image/jpeg,image/webp"
+            multiple
             aria-label="사진 첨부"
             hidden
             onChange={(e) => {
-              const file = e.target.files?.[0];
+              const files = Array.from(e.target.files || []);
               e.target.value = "";
-              void attachPhoto(file);
+              void attachPhotos(files);
             }}
           />
           {orderMode && (
@@ -626,7 +790,7 @@ export function StickerWorkspace({
                   onClick={() => photoInput.current?.click()}
                 >
                   <ImagePlus size={16} />
-                  {design.image || design.assetId ? "사진 변경" : "사진 추가"}
+                  사진 추가
                 </button>
                 {image && (
                   <button
@@ -649,6 +813,37 @@ export function StickerWorkspace({
                   문구 편집
                 </button>
               </div>
+              {!!layers.length && (
+                <div
+                  className="sticker-photo-list"
+                  role="group"
+                  aria-label="스티커 사진"
+                >
+                  {layers.map((layer, index) => (
+                    <button
+                      key={layer.id}
+                      type="button"
+                      disabled={working}
+                      aria-label={`사진 ${index + 1} 편집`}
+                      aria-pressed={
+                        panelOpen &&
+                        selected === "imageBox" &&
+                        selectedPhoto?.id === layer.id
+                      }
+                      onClick={() => {
+                        setSelectedImageId(layer.id);
+                        setSelected("imageBox");
+                        setPanelOpen(true);
+                      }}
+                    >
+                      {images[layer.image] && (
+                        <img src={images[layer.image].src} alt="" />
+                      )}
+                      사진 {index + 1}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div ref={canvasArea} className="sticker-canvas">
                 <canvas
                   ref={canvas}
@@ -678,8 +873,8 @@ export function StickerWorkspace({
                         : "문구 영역 크기 조절"
                     }
                     style={{
-                      left: `${design[selected].x + design[selected].width}%`,
-                      top: `${design[selected].y + design[selected].height}%`,
+                      left: `${selectedBox.x + selectedBox.width}%`,
+                      top: `${selectedBox.y + selectedBox.height}%`,
                     }}
                     onPointerDown={(e) => {
                       if (e.button !== 0) return;
@@ -688,7 +883,8 @@ export function StickerWorkspace({
                         id: e.pointerId,
                         x: e.clientX,
                         y: e.clientY,
-                        box: design[selected],
+                        box: selectedBox,
+                        imageId: selectedPhoto?.id,
                         layer: selected,
                         mode: "resize",
                       };
@@ -714,11 +910,11 @@ export function StickerWorkspace({
                       e.preventDefault();
                       patch({
                         [selected]: resizeStickerBox(
-                          design[selected],
+                          selectedBox,
                           delta[0],
                           delta[1],
                           selected === "imageBox" &&
-                            design.imageAspectLocked !== false,
+                            selectedPhoto?.aspectLocked !== false,
                         ),
                       });
                     }}
@@ -899,11 +1095,7 @@ export function StickerWorkspace({
                 {orderMode && (
                   <button
                     className="button secondary"
-                    disabled={
-                      working ||
-                      overflow ||
-                      !!((design.assetId || design.image) && !image)
-                    }
+                    disabled={working || overflow || !ready}
                     onClick={() => void copyImage()}
                   >
                     <Copy size={17} />
@@ -911,6 +1103,37 @@ export function StickerWorkspace({
                   </button>
                 )}
               </div>
+              {orderMode && (
+                <fieldset disabled={working}>
+                  <label>
+                    폼텍 용지
+                    <select
+                      aria-label="폼텍 용지"
+                      value={paper}
+                      onChange={(e) => setPaper(e.target.value as FormtecPaper)}
+                    >
+                      {Object.entries(formtecPapers).map(([code, spec]) => (
+                        <option key={code} value={code}>
+                          {spec.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {paper === "3639" && (
+                    <small>
+                      내용이 잘리지 않도록 이미지 전체를 원 안에 맞춥니다.
+                    </small>
+                  )}
+                  <button
+                    className="button secondary"
+                    disabled={working || overflow || !ready}
+                    onClick={() => void downloadFormtec()}
+                  >
+                    <Download size={17} />
+                    폼텍 {formtecPapers[paper].count}개 내보내기
+                  </button>
+                </fieldset>
+              )}
             </section>
             {panelOpen && (
               <section
@@ -1026,55 +1249,67 @@ export function StickerWorkspace({
                       </div>
                     </>
                   )}
-                  {selected === "imageBox" &&
-                    (design.assetId || design.image) && (
-                      <>
-                        <div
-                          className="sticker-tabs sticker-aspect"
-                          role="group"
-                          aria-label="그림 비율"
-                        >
-                          <button
-                            type="button"
-                            aria-pressed={design.imageAspectLocked !== false}
-                            onClick={() => patch({ imageAspectLocked: true })}
-                          >
-                            비율 고정
-                          </button>
-                          <button
-                            type="button"
-                            aria-pressed={design.imageAspectLocked === false}
-                            disabled={!image}
-                            onClick={() =>
-                              patch({
-                                imageAspectLocked: false,
-                                imageStretch: true,
-                                ...(!design.imageStretch && image
-                                  ? {
-                                      imageBox: fitStickerImageBox(
-                                        design.imageBox,
-                                        image.naturalWidth,
-                                        image.naturalHeight,
-                                        design.shape,
-                                      ),
-                                    }
-                                  : {}),
-                              })
-                            }
-                          >
-                            자유
-                          </button>
-                        </div>
+                  {selected === "imageBox" && selectedPhoto && (
+                    <>
+                      <div
+                        className="sticker-tabs sticker-aspect"
+                        role="group"
+                        aria-label="그림 비율"
+                      >
                         <button
-                          className="text-button"
+                          type="button"
+                          aria-pressed={selectedPhoto?.aspectLocked !== false}
+                          onClick={() => patch({ imageAspectLocked: true })}
+                        >
+                          비율 고정
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={selectedPhoto?.aspectLocked === false}
+                          disabled={!image}
                           onClick={() =>
-                            patch({ assetId: undefined, image: undefined })
+                            patch({
+                              imageAspectLocked: false,
+                              imageStretch: true,
+                              ...(!selectedPhoto?.stretch && image
+                                ? {
+                                    imageBox: fitStickerImageBox(
+                                      selectedPhoto.box,
+                                      image.naturalWidth,
+                                      image.naturalHeight,
+                                      design.shape,
+                                    ),
+                                  }
+                                : {}),
+                            })
                           }
                         >
-                          사진 제거
+                          자유
                         </button>
-                      </>
-                    )}
+                      </div>
+                      <button className="text-button" onClick={removePhoto}>
+                        사진 제거
+                      </button>
+                      <div className="button-row">
+                        <button
+                          className="button secondary"
+                          disabled={layers[0]?.id === selectedPhoto.id}
+                          onClick={() => reorderPhoto(-1)}
+                        >
+                          뒤로 보내기
+                        </button>
+                        <button
+                          className="button secondary"
+                          disabled={
+                            layers[layers.length - 1]?.id === selectedPhoto.id
+                          }
+                          onClick={() => reorderPhoto(1)}
+                        >
+                          앞으로 가져오기
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </fieldset>
               </section>
             )}

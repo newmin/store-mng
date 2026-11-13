@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { applyCommand, demoState } from "../src/lib/state";
 import {
   newStickerDesign,
+  stickerImages,
+  drawSticker,
+  MAX_STICKER_IMAGES,
   stickerAssetSchema,
   stickerBox,
   stickerDesignSchema,
@@ -24,6 +27,102 @@ const asset = {
   image: "demo-menu:11111111-1111-4111-8111-111111111111",
 };
 describe("sticker library and drafts", () => {
+  it("preserves legacy photos, saves multiple photos and independently copies template layers", () => {
+    const legacy = {
+      ...newStickerTemplate("legacy"),
+      image: "/stickers/flowers.png",
+    };
+    const first = stickerImages(legacy)[0];
+    expect(first.box).toEqual(legacy.imageBox);
+    const design = {
+      ...legacy,
+      images: [
+        first,
+        {
+          ...first,
+          id: "second",
+          image: "/stickers/brush.png",
+          box: { x: 55, y: 10, width: 30, height: 60 },
+          stretch: true,
+        },
+      ],
+    };
+    const saved = applyCommand(
+      demoState(),
+      { type: "saveStickerDesign", design },
+      "test",
+    );
+    const template = saved.stickerDesigns![0];
+    expect(stickerImages(template)).toEqual(design.images);
+    const order = orderFromTemplate(template, "order");
+    order.images![1].box.x = 20;
+    expect(template.images![1].box.x).toBe(55);
+    expect(stickerImages({ ...legacy, images: [] })).toEqual([]);
+    expect(
+      stickerImages({ ...legacy, image: undefined }, legacy.image),
+    ).toHaveLength(1);
+    for (const images of [
+      [first, first],
+      [{ ...first, image: "https://example.com/photo.png" }],
+      Array.from({ length: MAX_STICKER_IMAGES + 1 }, (_, i) => ({
+        ...first,
+        id: String(i),
+      })),
+      [{ ...first, box: { x: 95, y: 0, width: 20, height: 20 } }],
+    ])
+      expect(stickerDesignSchema.safeParse({ ...legacy, images }).success).toBe(
+        false,
+      );
+  });
+  it("renders every photo in saved stacking order with independent placement and distortion", () => {
+    const design = {
+      ...newStickerDesign("render"),
+      text: "",
+      images: [
+        {
+          id: "a",
+          image: "/stickers/flowers.png",
+          box: { x: 0, y: 0, width: 20, height: 40 },
+        },
+        {
+          id: "b",
+          image: "/stickers/brush.png",
+          box: { x: 50, y: 10, width: 40, height: 60 },
+          stretch: true,
+        },
+      ],
+    };
+    const drawImage = vi.fn();
+    const ctx = {
+      drawImage,
+      fillRect: vi.fn(),
+      measureText: () => ({ width: 0 }),
+      save: vi.fn(),
+      beginPath: vi.fn(),
+      rect: vi.fn(),
+      clip: vi.fn(),
+      fillText: vi.fn(),
+      restore: vi.fn(),
+    };
+    const canvas = { getContext: () => ctx } as unknown as HTMLCanvasElement;
+    const a = { naturalWidth: 100, naturalHeight: 100 } as HTMLImageElement;
+    const b = { naturalWidth: 100, naturalHeight: 100 } as HTMLImageElement;
+    drawSticker(canvas, design, {
+      "/stickers/flowers.png": a,
+      "/stickers/brush.png": b,
+    });
+    expect(drawImage.mock.calls).toEqual([
+      [a, 0, 10, 180, 180],
+      [b, 450, 50, 360, 300],
+    ]);
+    drawImage.mockClear();
+    drawSticker(
+      canvas,
+      { ...design, images: [...design.images].reverse() },
+      { "/stickers/flowers.png": a, "/stickers/brush.png": b },
+    );
+    expect(drawImage.mock.calls.map((call) => call[0])).toEqual([b, a]);
+  });
   it("edits each sample in place and creates independent stickers from it", () => {
     let s = demoState();
     const templates = stickerTemplates(s);

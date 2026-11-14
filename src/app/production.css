@@ -441,3 +441,106 @@
     font-size: 11px;
   }
 }
+.recommendation-loading-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--color-primary-soft);
+}
+.recommendation-loading-symbol {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+.recommendation-loading-symbol svg {
+  animation: recommendation-spin 1.2s linear infinite;
+}
+@keyframes recommendation-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.recommendation-loading-status h3 {
+  font-size: 16px;
+}
+.recommendation-loading-status p {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.recommendation-conditions-title {
+  margin: 24px 0 12px;
+}
+.recommendation-conditions {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.recommendation-conditions li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
+}
+.recommendation-conditions li + li {
+  border-top: 1px solid var(--color-border);
+}
+.recommendation-conditions li > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--color-text-secondary);
+}
+.recommendation-conditions strong {
+  font-size: 13px;
+}
+.recommendation-conditions p {
+  margin-top: 5px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.recommendation-loading-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.recommendation-loading-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.recommendation-loading-warning {
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+  font-size: 12px;
+}
+.recommendation-loading .form-footer {
+  margin-top: 20px;
+}
+@media (max-width: 640px) {
+  .recommendation-loading-status {
+    padding: 14px;
+    gap: 12px;
+  }
+  .recommendation-loading-status h3 {
+    font-size: 14px;
+  }
+  .recommendation-conditions-title {
+    margin-top: 18px;
+  }
+  .recommendation-conditions li {
+    padding: 12px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recommendation-loading-symbol svg {
+    animation: none;
+  }
+}

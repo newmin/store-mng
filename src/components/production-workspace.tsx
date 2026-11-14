@@ -184,7 +184,7 @@ export function ProductionWorkspace({
               >
                 <Sparkles size={19} />
                 {thinking
-                  ? "AI 추천안 검증 중…"
+                  ? "AI 추천 중…"
                   : state.settings.initialized
                     ? "AI 메뉴 추천"
                     : "AI 추천 기준 설정"}

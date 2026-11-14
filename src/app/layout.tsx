@@ -7,6 +7,7 @@ import "./globals.css";
 import "./order-pickers.css";
 import "./order-calendar.css";
 import "./brand.css";
+import "./sidebar.css";
 import "./menu-catalog.css";
 import "./production.css";
 import "./menu-manager.css";

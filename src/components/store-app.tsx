@@ -62,6 +62,7 @@ import { BackToTop } from "./back-to-top";
 import { MenuManager } from "./menu-manager";
 import type { ProductSection } from "./product-form";
 import { ProductionWorkspace } from "./production-workspace";
+import { RecommendationLoading } from "./recommendation-loading";
 import { StickerWorkspace, type StickerHeader } from "./sticker-workspace";
 import { fulfillmentLabel } from "@/lib/order-message";
 import type { Command, Material, Order, Plan, Product, Lot } from "@/lib/types";
@@ -213,8 +214,31 @@ export default function StoreApp() {
     [recovery, setRecovery] = useState(false);
   const todayDate = today();
   const latestRevision = useRef(state?.revision);
+  const recommendationRequest = useRef<AbortController | null>(null);
   latestRevision.current = state?.revision;
   const [productSaving, setProductSaving] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("tteokdam-sidebar-collapsed");
+      setSidebarCollapsed(
+        saved === null
+          ? window.matchMedia("(max-width: 1000px)").matches
+          : saved === "true",
+      );
+    } catch {
+      setSidebarCollapsed(window.matchMedia("(max-width: 1000px)").matches);
+    }
+  }, []);
+  function toggleSidebar() {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try {
+      localStorage.setItem("tteokdam-sidebar-collapsed", String(next));
+    } catch {
+      // The menu can still be toggled when browser storage is unavailable.
+    }
+  }
   const [stickerEditing, setStickerEditing] = useState(false);
   const [stickerHeader, setStickerHeader] = useState<StickerHeader>({
     title: "스티커",
@@ -247,7 +271,8 @@ export default function StoreApp() {
     return () => data?.subscription.unsubscribe();
   }, []);
   useEffect(() => {
-    if (!sharedMode || !user || modal || busy || stickerEditing) return;
+    if (!sharedMode || !user || modal || busy || stickerEditing || thinking)
+      return;
     const handler = () => {
       if (document.visibilityState === "visible") void refresh();
     };
@@ -257,7 +282,8 @@ export default function StoreApp() {
       clearInterval(id);
       window.removeEventListener("focus", handler);
     };
-  }, [user, modal, busy, refresh, stickerEditing]);
+  }, [user, modal, busy, refresh, stickerEditing, thinking]);
+  useEffect(() => () => recommendationRequest.current?.abort(), []);
   const open = (m: Modal) => {
     setError("");
     setModal(m);
@@ -282,7 +308,9 @@ export default function StoreApp() {
     } catch {}
   }
   async function recommend() {
-    if (!state || thinking) return;
+    if (!state || thinking || recommendationRequest.current) return;
+    const request = new AbortController();
+    recommendationRequest.current = request;
     const requestedRevision = state.revision;
     const requestedVersion = sharedMode ? version : requestedRevision;
     setThinking(true);
@@ -290,6 +318,7 @@ export default function StoreApp() {
     try {
       const result = await authFetch("/api/recommend", {
         method: "POST",
+        signal: request.signal,
         body: JSON.stringify({
           date,
           version: requestedVersion,
@@ -298,6 +327,7 @@ export default function StoreApp() {
             : {}),
         }),
       });
+      if (request.signal.aborted) return;
       if (
         result.version !== requestedVersion ||
         latestRevision.current !== requestedRevision
@@ -309,10 +339,18 @@ export default function StoreApp() {
         questions: result.questions,
       });
     } catch (e) {
-      setError((e as Error).message);
+      if (!request.signal.aborted) setError((e as Error).message);
     } finally {
-      setThinking(false);
+      if (recommendationRequest.current === request) {
+        recommendationRequest.current = null;
+        setThinking(false);
+      }
     }
+  }
+  function cancelRecommendation() {
+    recommendationRequest.current?.abort();
+    recommendationRequest.current = null;
+    setThinking(false);
   }
   if (!ready)
     return (
@@ -567,24 +605,46 @@ export default function StoreApp() {
   }
   return (
     <div
-      className={`app-shell${view === "orders" ? " reservation-shell" : ""}`}
+      className={`app-shell${view === "orders" ? " reservation-shell" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}
     >
       <aside className="sidebar">
-        <a className="brand" href="/" aria-label="말랑콩떡 홈">
-          <BrandMark />
-          <span>
-            말랑콩떡<small>함께 쓰는 매장 노트</small>
-          </span>
-        </a>
+        <div className="sidebar-header">
+          <a className="brand" href="/" aria-label="말랑콩떡 홈">
+            <BrandMark />
+            <span>
+              말랑콩떡<small>함께 쓰는 매장 노트</small>
+            </span>
+          </a>
+          <button
+            type="button"
+            className="icon-button sidebar-toggle"
+            onClick={toggleSidebar}
+            aria-label={
+              sidebarCollapsed ? "사이드메뉴 펼치기" : "사이드메뉴 접기"
+            }
+            title={sidebarCollapsed ? "사이드메뉴 펼치기" : "사이드메뉴 접기"}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="store-navigation"
+          >
+            {sidebarCollapsed ? (
+              <ChevronRight size={20} aria-hidden="true" />
+            ) : (
+              <ChevronLeft size={20} aria-hidden="true" />
+            )}
+          </button>
+        </div>
         <div className="shop-label">
           <span className="live-dot" /> 말랑콩떡{" "}
           <span className="shop-tag">매장</span>
         </div>
-        <nav>
+        <nav id="store-navigation" aria-label="매장 메뉴">
           {navigation.map((n) => (
             <button
               key={n.id}
               className={view === n.id ? "nav-item active" : "nav-item"}
+              aria-label={n.label}
+              title={n.label}
+              aria-current={view === n.id ? "page" : undefined}
               onClick={() => {
                 setView(n.id);
                 setQuery("");
@@ -1565,7 +1625,20 @@ export default function StoreApp() {
           <span>설정</span>
         </button>
       </nav>
-      <BackToTop hidden={!!modal} />
+      <BackToTop hidden={!!modal || thinking} />
+      {thinking && (
+        <ModalShell
+          title="AI 메뉴 추천 중"
+          busy={false}
+          onClose={cancelRecommendation}
+        >
+          <RecommendationLoading
+            state={state}
+            date={date}
+            onCancel={cancelRecommendation}
+          />
+        </ModalShell>
+      )}
       {toast && (
         <Notice
           kind="success"

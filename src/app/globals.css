@@ -524,6 +524,10 @@ main {
   cursor: pointer;
 }
 .today-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   padding: 5px 11px;
@@ -540,6 +544,10 @@ main {
   gap: 3px;
 }
 .segmented button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   border: 0;
   background: none;
   color: var(--color-text-muted);
@@ -708,9 +716,12 @@ main {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-top: 1px;
+  padding-top: 0;
 }
 .order-time strong {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
   font-size: 14px;
   color: var(--color-text-secondary);
   letter-spacing: -0.5px;
@@ -728,7 +739,8 @@ main {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 6px;
+  min-height: 24px;
+  margin-bottom: 4px;
 }
 .order-title h3 {
   font-size: 12px;
@@ -792,6 +804,56 @@ main {
   color: var(--color-text-muted);
   display: block;
   margin-top: 6px;
+}
+.order-delivery-address {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.order-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 8px;
+}
+.order-links:empty {
+  display: none;
+}
+.order-links .text-button {
+  min-height: 32px;
+  padding: 4px 0;
+  line-height: 1.4;
+}
+.order-links .text-button svg {
+  flex-shrink: 0;
+}
+.filter-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+@media (max-width: 640px) {
+  .order-links {
+    gap: 8px;
+  }
+  .order-links .text-button {
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    justify-content: center;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+  }
+  .order-links .text-button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .order-links .button-label {
+    display: none;
+  }
 }
 .order-actions {
   position: relative;

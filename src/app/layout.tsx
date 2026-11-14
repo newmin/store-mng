@@ -5,6 +5,7 @@ import { brand } from "@/lib/brand";
 import { AppUpdateChecker } from "@/components/app-update-checker";
 import "./globals.css";
 import "./order-pickers.css";
+import "./order-calendar.css";
 import "./brand.css";
 import "./menu-catalog.css";
 import "./production.css";

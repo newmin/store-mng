@@ -4,7 +4,7 @@ import { Notice } from "./notice";
 import { OrderVoiceInput } from "./order-voice-input";
 import type { VoiceOrderDraft } from "@/lib/order-voice";
 import { formatPhone, validPhone } from "@/lib/order-input";
-import { Plus, Trash2, Info } from "lucide-react";
+import { Plus, Trash2, Info, RefreshCw, Save, CheckCheck } from "lucide-react";
 import {
   FulfillmentPicker,
   MenuPicker,
@@ -37,6 +37,7 @@ function Footer({
   return (
     <div className="form-footer">
       <button className="button primary" type="submit" disabled={disabled}>
+        <Save size={16} aria-hidden="true" />
         {label}
       </button>
     </div>
@@ -565,7 +566,7 @@ export function PlanForm({
               ]);
             }}
           >
-            필요 수량 다시 계산
+            <RefreshCw size={16} aria-hidden="true" /> 필요 수량 다시 계산
           </button>
         </div>
         <div className="plan-editor-list">
@@ -712,7 +713,7 @@ export function PlanForm({
             value="draft"
             disabled={!lines.length}
           >
-            초안 저장
+            <Save size={16} aria-hidden="true" /> 초안 저장
           </button>
           <button
             className="button primary"
@@ -722,7 +723,7 @@ export function PlanForm({
               !lines.length || usage.issues.length > 0 || uncovered.length > 0
             }
           >
-            계획 확정
+            <CheckCheck size={16} aria-hidden="true" /> 계획 확정
           </button>
         </div>
       </fieldset>

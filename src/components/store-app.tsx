@@ -28,6 +28,17 @@ import {
   Undo2,
   Users,
   X,
+  Image,
+  CalendarCheck,
+  CalendarPlus,
+  ArrowDownUp,
+  KeyRound,
+  XCircle,
+  MessageSquare,
+  CalendarRange,
+  List,
+  Clock3,
+  ListFilter,
 } from "lucide-react";
 import { addDays, koreanDate, today, uid } from "@/lib/dates";
 import {
@@ -45,6 +56,8 @@ import { Notice } from "./notice";
 import { BrandMark, BrandWelcome } from "./store-brand";
 import { OrderMessage } from "./order-message";
 import { OrderList } from "./order-list";
+import { OrderCalendar } from "./order-calendar";
+import { calendarPeriod, type CalendarView } from "@/lib/order-calendar";
 import { BackToTop } from "./back-to-top";
 import { MenuManager } from "./menu-manager";
 import type { ProductSection } from "./product-form";
@@ -185,6 +198,7 @@ export default function StoreApp() {
   const { state, ready, user, busy, error, setError, run, refresh, version } =
     store;
   const [view, changeView] = useState<View>("home"),
+    [ordersView, setOrdersView] = useState<CalendarView | "list">("month"),
     [date, setDate] = useState(today()),
     [range, setRange] = useState<"day" | "week" | "custom">("day"),
     [customEnd, setCustomEnd] = useState(addDays(today(), 6)),
@@ -317,8 +331,12 @@ export default function StoreApp() {
       />
     );
   if (!state) return <Login error={error} setError={setError} />;
+  const orderPeriod =
+    view === "orders" && ordersView !== "list"
+      ? calendarPeriod(date, ordersView)
+      : { start: date, end };
   const orders = state.orders
-    .filter((o) => o.date >= date && o.date <= end)
+    .filter((o) => o.date >= orderPeriod.start && o.date <= orderPeriod.end)
     .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   const activeOrders = orders.filter((o) => o.status !== "cancelled");
   const filtered = orders.filter(
@@ -354,6 +372,39 @@ export default function StoreApp() {
     state.materials.find((m) => m.id === id)?.name || "삭제된 품목";
   const productName = (id: string) =>
     state.products.find((p) => p.id === id)?.name || "미등록 메뉴";
+  const orderControls = (
+    <div className="list-controls">
+      <div className="filter-tabs">
+        {(
+          [
+            ["all", "전체", ListFilter],
+            ["reserved", "수령 대기", Clock3],
+            ["picked", "수령 완료", CheckCheck],
+            ["cancelled", "취소", XCircle],
+          ] as const
+        ).map(([id, label, Icon]) => (
+          <button
+            key={id}
+            className={statusFilter === id ? "active" : ""}
+            aria-pressed={statusFilter === id}
+            onClick={() => setStatusFilter(id)}
+          >
+            <Icon size={14} aria-hidden="true" />
+            {label}
+          </button>
+        ))}
+      </div>
+      <label className="search-box">
+        <Search size={17} />
+        <input
+          placeholder="고객명, 연락처, 문구 검색"
+          aria-label="주문 검색"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </label>
+    </div>
+  );
   const newOrderButton = (
     <button
       className="button primary"
@@ -426,35 +477,46 @@ export default function StoreApp() {
           {o.fulfillment !== "pickup" && o.deliveryAddress && (
             <p className="order-delivery-address">{o.deliveryAddress}</p>
           )}
-          {o.status !== "cancelled" && (
-            <button
-              type="button"
-              className="text-button small"
-              onClick={() => {
-                setStickerOrderId(o.id);
-                setView("stickers");
-              }}
-            >
-              <StickyNote size={14} /> 스티커 제작
-            </button>
-          )}
-          {o.status !== "cancelled" && (
-            <button
-              type="button"
-              className="text-button small"
-              onClick={() => open({ type: "message", orderId: o.id })}
-            >
-              예약확인문자
-            </button>
-          )}
-          {o.imagePath && (
-            <button
-              className="text-button small"
-              onClick={() => open({ type: "image", path: o.imagePath! })}
-            >
-              참고 이미지 보기
-            </button>
-          )}
+          <div className="order-links">
+            {o.status !== "cancelled" && (
+              <button
+                type="button"
+                className="text-button small"
+                aria-label="스티커 제작"
+                title="스티커 제작"
+                onClick={() => {
+                  setStickerOrderId(o.id);
+                  setView("stickers");
+                }}
+              >
+                <StickyNote size={16} aria-hidden="true" />{" "}
+                <span className="button-label">스티커 제작</span>
+              </button>
+            )}
+            {o.status !== "cancelled" && (
+              <button
+                type="button"
+                className="text-button small"
+                aria-label="예약확인문자"
+                title="예약확인문자"
+                onClick={() => open({ type: "message", orderId: o.id })}
+              >
+                <MessageSquare size={16} aria-hidden="true" />{" "}
+                <span className="button-label">예약확인문자</span>
+              </button>
+            )}
+            {o.imagePath && (
+              <button
+                className="text-button small"
+                aria-label="참고 이미지 보기"
+                title="참고 이미지 보기"
+                onClick={() => open({ type: "image", path: o.imagePath! })}
+              >
+                <Image size={16} aria-hidden="true" />{" "}
+                <span className="button-label">참고 이미지 보기</span>
+              </button>
+            )}
+          </div>
         </div>
         <div className="order-actions">
           {o.status !== "cancelled" ? (
@@ -504,7 +566,9 @@ export default function StoreApp() {
     );
   }
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell${view === "orders" ? " reservation-shell" : ""}`}
+    >
       <aside className="sidebar">
         <a className="brand" href="/" aria-label="말랑콩떡 홈">
           <BrandMark />
@@ -603,6 +667,35 @@ export default function StoreApp() {
                 <span className="heading-dot">.</span>
               </h1>
             </div>
+            {view === "orders" && (
+              <div className="reservation-view-switch">
+                <div
+                  className="segmented"
+                  role="group"
+                  aria-label="예약 보기 방식"
+                >
+                  {(
+                    [
+                      ["month", "월간", CalendarDays],
+                      ["week", "주간", CalendarRange],
+                      ["list", "목록", List],
+                    ] as const
+                  ).map(([mode, label, Icon]) => (
+                    <button
+                      key={mode}
+                      className={ordersView === mode ? "selected" : ""}
+                      aria-pressed={ordersView === mode}
+                      aria-label={label}
+                      title={label}
+                      onClick={() => setOrdersView(mode)}
+                    >
+                      <Icon size={15} aria-hidden="true" />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {view === "home" || view === "orders" ? (
               newOrderButton
             ) : view === "settings" ? (
@@ -638,92 +731,94 @@ export default function StoreApp() {
                 message="생산 기준 미등록 메뉴는 재료 계산에서 제외됩니다. 매장 설정에서 생산량·레시피를 등록해 주세요."
               />
             )}
-          {view !== "settings" && view !== "stickers" && (
-            <div className="date-toolbar">
-              <div className="date-switch">
-                <button
-                  aria-label="이전 날짜"
-                  className="icon-button"
-                  onClick={() => setDate(addDays(date, -1))}
-                >
-                  <ChevronLeft size={18} />
-                </button>
-                <label className="date-picker">
-                  <CalendarDays size={17} />
-                  <span>{koreanDate(date)}</span>
-                  <input
-                    aria-label="조회 날짜"
-                    type="date"
-                    value={date}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        setDate(e.target.value);
-                        if (customEnd < e.target.value)
-                          setCustomEnd(e.target.value);
-                      }
-                    }}
-                  />
-                </label>
-                <button
-                  aria-label="다음 날짜"
-                  className="icon-button"
-                  onClick={() => setDate(addDays(date, 1))}
-                >
-                  <ChevronRight size={18} />
-                </button>
-                <button
-                  className="today-button"
-                  onClick={() => {
-                    setDate(todayDate);
-                    setRange("day");
-                  }}
-                >
-                  오늘
-                </button>
-                <button
-                  className="today-button"
-                  onClick={() => {
-                    setDate(addDays(todayDate, 1));
-                    setRange("day");
-                  }}
-                >
-                  내일
-                </button>
-              </div>
-              <div className="segmented">
-                {(["day", "week", "custom"] as const).map((r, i) => (
+          {view !== "settings" &&
+            view !== "stickers" &&
+            (view !== "orders" || ordersView === "list") && (
+              <div className="date-toolbar">
+                <div className="date-switch">
                   <button
-                    key={r}
-                    className={range === r ? "selected" : ""}
+                    aria-label="이전 날짜"
+                    className="icon-button"
+                    onClick={() => setDate(addDays(date, -1))}
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <label className="date-picker">
+                    <CalendarDays size={17} />
+                    <span>{koreanDate(date)}</span>
+                    <input
+                      aria-label="조회 날짜"
+                      type="date"
+                      value={date}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setDate(e.target.value);
+                          if (customEnd < e.target.value)
+                            setCustomEnd(e.target.value);
+                        }
+                      }}
+                    />
+                  </label>
+                  <button
+                    aria-label="다음 날짜"
+                    className="icon-button"
+                    onClick={() => setDate(addDays(date, 1))}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                  <button
+                    className="today-button"
                     onClick={() => {
-                      setRange(r);
-                      if (r === "custom" && customEnd < date)
-                        setCustomEnd(date);
+                      setDate(todayDate);
+                      setRange("day");
                     }}
                   >
-                    {["일간", "7일간", "기간 지정"][i]}
+                    <CalendarCheck size={16} aria-hidden="true" /> 오늘
                   </button>
-                ))}
+                  <button
+                    className="today-button"
+                    onClick={() => {
+                      setDate(addDays(todayDate, 1));
+                      setRange("day");
+                    }}
+                  >
+                    <CalendarPlus size={16} aria-hidden="true" /> 내일
+                  </button>
+                </div>
+                <div className="segmented">
+                  {(["day", "week", "custom"] as const).map((r, i) => (
+                    <button
+                      key={r}
+                      className={range === r ? "selected" : ""}
+                      onClick={() => {
+                        setRange(r);
+                        if (r === "custom" && customEnd < date)
+                          setCustomEnd(date);
+                      }}
+                    >
+                      {["일간", "7일간", "기간 지정"][i]}
+                    </button>
+                  ))}
+                </div>
+                {range === "custom" && (
+                  <label className="range-end">
+                    종료일{" "}
+                    <input
+                      aria-label="종료일"
+                      type="date"
+                      min={date}
+                      max={addDays(date, 365)}
+                      value={customEnd}
+                      onChange={(e) =>
+                        setCustomEnd(
+                          e.target.value < date ? date : e.target.value,
+                        )
+                      }
+                    />
+                  </label>
+                )}
               </div>
-              {range === "custom" && (
-                <label className="range-end">
-                  종료일{" "}
-                  <input
-                    aria-label="종료일"
-                    type="date"
-                    min={date}
-                    max={addDays(date, 365)}
-                    value={customEnd}
-                    onChange={(e) =>
-                      setCustomEnd(
-                        e.target.value < date ? date : e.target.value,
-                      )
-                    }
-                  />
-                </label>
-              )}
-            </div>
-          )}
+            )}
           {view === "home" && (
             <>
               <BrandWelcome />
@@ -900,57 +995,49 @@ export default function StoreApp() {
           )}
           {view === "orders" && (
             <>
-              <div className="list-controls">
-                <div className="filter-tabs">
-                  {[
-                    ["all", "전체"],
-                    ["reserved", "수령 대기"],
-                    ["picked", "수령 완료"],
-                    ["cancelled", "취소"],
-                  ].map(([id, label]) => (
-                    <button
-                      key={id}
-                      className={statusFilter === id ? "active" : ""}
-                      onClick={() => setStatusFilter(id)}
-                    >
-                      {label}
-                    </button>
-                  ))}
+              {ordersView === "list" && orderControls}
+              {ordersView !== "list" ? (
+                <OrderCalendar
+                  view={ordersView}
+                  date={date}
+                  today={todayDate}
+                  orders={filtered}
+                  products={state.products}
+                  controls={orderControls}
+                  onDate={(next) => {
+                    setDate(next);
+                    if (customEnd < next) setCustomEnd(next);
+                  }}
+                  onNewOrder={() => open({ type: "order" })}
+                  renderOrder={(order) => <OrderCard order={order} />}
+                />
+              ) : (
+                <div className="panel">
+                  <div className="panel-heading">
+                    <h2>
+                      예약 목록{" "}
+                      <span className="count-badge">{filtered.length}</span>
+                    </h2>
+                    <span className="muted small">
+                      {date} {date !== end && `— ${end}`}
+                    </span>
+                  </div>
+                  {filtered.length ? (
+                    <OrderList
+                      key={`${date}:${end}:${query}:${statusFilter}`}
+                      items={filtered}
+                      collapsible
+                      renderOrder={(order) => (
+                        <OrderCard key={order.id} order={order} />
+                      )}
+                    />
+                  ) : (
+                    <Empty action={newOrderButton}>
+                      조회 조건에 맞는 주문이 없어요.
+                    </Empty>
+                  )}
                 </div>
-                <label className="search-box">
-                  <Search size={17} />
-                  <input
-                    placeholder="고객명, 연락처, 문구 검색"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="panel">
-                <div className="panel-heading">
-                  <h2>
-                    예약 목록{" "}
-                    <span className="count-badge">{filtered.length}</span>
-                  </h2>
-                  <span className="muted small">
-                    {date} {date !== end && `— ${end}`}
-                  </span>
-                </div>
-                {filtered.length ? (
-                  <OrderList
-                    key={`${date}:${end}:${query}:${statusFilter}`}
-                    items={filtered}
-                    collapsible
-                    renderOrder={(order) => (
-                      <OrderCard key={order.id} order={order} />
-                    )}
-                  />
-                ) : (
-                  <Empty action={newOrderButton}>
-                    조회 조건에 맞는 주문이 없어요.
-                  </Empty>
-                )}
-              </div>
+              )}
               <section className="panel below">
                 <div className="panel-heading">
                   <h2>기간 내 떡별 예약 수량</h2>
@@ -1111,6 +1198,7 @@ export default function StoreApp() {
                                       open({ type: "stock", material: m })
                                     }
                                   >
+                                    <ArrowDownUp size={16} aria-hidden="true" />{" "}
                                     입출고
                                   </button>
                                   <button
@@ -1123,7 +1211,8 @@ export default function StoreApp() {
                                       })
                                     }
                                   >
-                                    기준 수정
+                                    <Pencil size={16} aria-hidden="true" /> 기준
+                                    수정
                                   </button>
                                 </div>
                               </td>
@@ -1366,7 +1455,7 @@ export default function StoreApp() {
                       className="button secondary"
                       onClick={() => open({ type: "settings" })}
                     >
-                      추천 기준 수정
+                      <Settings size={16} aria-hidden="true" /> 추천 기준 수정
                     </button>
                   </div>
                 </section>
@@ -1384,7 +1473,8 @@ export default function StoreApp() {
                           className="button secondary"
                           onClick={() => setRecovery(true)}
                         >
-                          비밀번호 설정 · 변경
+                          <KeyRound size={16} aria-hidden="true" /> 비밀번호
+                          설정 · 변경
                         </button>
                       </>
                     )}
@@ -1556,7 +1646,7 @@ export default function StoreApp() {
                       });
                   }}
                 >
-                  주문 취소
+                  <XCircle size={16} aria-hidden="true" /> 주문 취소
                 </button>
               )}
             </>
@@ -1662,7 +1752,8 @@ export default function StoreApp() {
                   })
                 }
               >
-                추천안을 생산계획에서 검토
+                <ClipboardList size={16} aria-hidden="true" /> 추천안을
+                생산계획에서 검토
               </button>
             </div>
           )}
@@ -1797,7 +1888,7 @@ function Login({
                 }
               }}
             >
-              비밀번호를 잊으셨나요?
+              <KeyRound size={16} aria-hidden="true" /> 비밀번호를 잊으셨나요?
             </button>
           )}
         </form>

@@ -15,6 +15,14 @@ import {
   Circle,
   X,
   StickyNote,
+  Type,
+  Bold,
+  LockKeyhole,
+  UnlockKeyhole,
+  Trash2,
+  SendToBack,
+  BringToFront,
+  Save,
 } from "lucide-react";
 import { uid } from "@/lib/dates";
 import { formtecPapers, makeFormtecFile } from "@/lib/formtec";
@@ -800,7 +808,7 @@ export function StickerWorkspace({
                     setPanelOpen(true);
                   }}
                 >
-                  문구 편집
+                  <Type size={16} aria-hidden="true" /> 문구 편집
                 </button>
               </div>
               {!!layers.length && (
@@ -974,7 +982,7 @@ export function StickerWorkspace({
                             tagInput.current?.focus();
                           }}
                         >
-                          추가
+                          <Plus size={16} aria-hidden="true" /> 추가
                         </button>
                       </div>
                     </label>
@@ -1089,6 +1097,7 @@ export function StickerWorkspace({
                   disabled={working}
                   onClick={() => void saveDesign()}
                 >
+                  <Save size={16} aria-hidden="true" />
                   {orderMode ? "스티커 저장" : "템플릿 저장"}
                 </button>
                 {orderMode && (
@@ -1187,7 +1196,7 @@ export function StickerWorkspace({
                           onClick={() => patch({ bold: !design.bold })}
                           className="sticker-bold"
                         >
-                          굵
+                          <Bold size={16} aria-hidden="true" /> 굵
                         </button>
                         {(
                           [
@@ -1241,7 +1250,7 @@ export function StickerWorkspace({
                           aria-pressed={selectedPhoto?.aspectLocked !== false}
                           onClick={() => patch({ imageAspectLocked: true })}
                         >
-                          비율 고정
+                          <LockKeyhole size={16} aria-hidden="true" /> 비율 고정
                         </button>
                         <button
                           type="button"
@@ -1264,11 +1273,11 @@ export function StickerWorkspace({
                             })
                           }
                         >
-                          자유
+                          <UnlockKeyhole size={16} aria-hidden="true" /> 자유
                         </button>
                       </div>
                       <button className="text-button" onClick={removePhoto}>
-                        사진 제거
+                        <Trash2 size={16} aria-hidden="true" /> 사진 제거
                       </button>
                       <div className="button-row">
                         <button
@@ -1276,7 +1285,8 @@ export function StickerWorkspace({
                           disabled={layers[0]?.id === selectedPhoto.id}
                           onClick={() => reorderPhoto(-1)}
                         >
-                          뒤로 보내기
+                          <SendToBack size={16} aria-hidden="true" /> 뒤로
+                          보내기
                         </button>
                         <button
                           className="button secondary"
@@ -1285,7 +1295,8 @@ export function StickerWorkspace({
                           }
                           onClick={() => reorderPhoto(1)}
                         >
-                          앞으로 가져오기
+                          <BringToFront size={16} aria-hidden="true" /> 앞으로
+                          가져오기
                         </button>
                       </div>
                     </>

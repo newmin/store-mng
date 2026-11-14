@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Search } from "lucide-react";
+import { Pencil, Search, RotateCcw } from "lucide-react";
 import { recipeIssue } from "@/lib/calculations";
 import { menuCategories } from "@/lib/menu-catalog";
 import type { Product, StoreState } from "@/lib/types";
@@ -113,7 +113,7 @@ export function MenuManager({
                     className="menu-setup-link"
                     onClick={() => onEdit(product, "production")}
                   >
-                    기준 등록 필요
+                    <Pencil size={16} aria-hidden="true" /> 기준 등록 필요
                   </button>
                 ) : (
                   <>
@@ -158,7 +158,7 @@ export function MenuManager({
                 setStatus("all");
               }}
             >
-              필터 초기화
+              <RotateCcw size={16} aria-hidden="true" /> 필터 초기화
             </button>
           )}
         </div>

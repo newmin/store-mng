@@ -1,4 +1,5 @@
 "use client";
+import { Copy, MessageSquare } from "lucide-react";
 
 import { useRef, useState } from "react";
 import { orderMessage, smsLink } from "@/lib/order-message";
@@ -86,7 +87,7 @@ export function OrderMessage({
           className="button secondary"
           onClick={() => void copy()}
         >
-          문구 복사
+          <Copy size={16} aria-hidden="true" /> 문구 복사
         </button>
         {order.phone && (
           <button
@@ -94,7 +95,7 @@ export function OrderMessage({
             className="button primary"
             onClick={openMessages}
           >
-            문자 앱 열기
+            <MessageSquare size={16} aria-hidden="true" /> 문자 앱 열기
           </button>
         )}
       </div>

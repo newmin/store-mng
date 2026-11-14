@@ -454,3 +454,9 @@
     padding: 8px 10px;
   }
 }
+.sticker-text-tools .sticker-bold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}

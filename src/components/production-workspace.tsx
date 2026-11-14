@@ -8,6 +8,7 @@ import {
   Plus,
   Sparkles,
   TriangleAlert,
+  Package,
 } from "lucide-react";
 import { recipeIssue, requirements, simulate } from "@/lib/calculations";
 import { koreanDate } from "@/lib/dates";
@@ -115,7 +116,7 @@ export function ProductionWorkspace({
           <div className="production-menu-issue">
             <span>{issue}</span>
             <button className="text-button" onClick={() => onProduct(product)}>
-              기준 등록
+              <Pencil size={16} aria-hidden="true" /> 기준 등록
             </button>
           </div>
         )}
@@ -336,7 +337,7 @@ export function ProductionWorkspace({
                 <TriangleAlert size={17} />
                 <span>부족한 재료 {check.shortages.length}종</span>
                 <button className="text-button" onClick={onInventory}>
-                  재고 관리
+                  <Package size={16} aria-hidden="true" /> 재고 관리
                 </button>
               </div>
             )}

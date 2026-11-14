@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { Copy, Plus, Trash2, Upload } from "lucide-react";
+import { Copy, Plus, Trash2, Upload, Save } from "lucide-react";
 import { uid } from "@/lib/dates";
 import { recipeIssue } from "@/lib/calculations";
 import { menuCategories } from "@/lib/menu-catalog";
@@ -252,7 +252,7 @@ export function ProductForm({
                     setPhotoPreview("");
                   }}
                 >
-                  사진 삭제
+                  <Trash2 size={16} aria-hidden="true" /> 사진 삭제
                 </button>
               )}
             </div>
@@ -343,7 +343,7 @@ export function ProductForm({
                     setFeedback(`${source.name}의 생산 기준을 가져왔어요.`);
                   }}
                 >
-                  가져오기
+                  <Copy size={16} aria-hidden="true" /> 가져오기
                 </button>
               </div>
               <p className="field-help">
@@ -505,6 +505,7 @@ export function ProductForm({
         </section>
         <div className="form-footer product-editor-footer">
           <button className="button primary" type="submit">
+            <Save size={16} aria-hidden="true" />
             {saving ? "사진과 메뉴 저장 중…" : "메뉴 저장"}
           </button>
         </div>

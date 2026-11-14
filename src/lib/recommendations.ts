@@ -12,12 +12,22 @@ export function validateRecommendations(
   state: StoreState,
   date: string,
   lines: ProductionLine[],
+  currentLines: ProductionLine[] = [],
 ) {
-  const allowed = new Set(fallbackCandidates(state, date).map((p) => p.id));
+  const allowed = new Set(
+    fallbackCandidates(state, date)
+      .filter((p) => !currentLines.some((l) => l.productId === p.id))
+      .map((p) => p.id),
+  );
   const req = requirements(state, date);
   const baseline = req
     .filter((r) => r.batches)
     .map((r) => ({ productId: r.product.id, batches: r.batches }));
+  for (const line of currentLines) {
+    const existing = baseline.find((l) => l.productId === line.productId);
+    if (existing) existing.batches = Math.max(existing.batches, line.batches);
+    else baseline.push(line);
+  }
   const currentReserved = materialUsage(
     state,
     req

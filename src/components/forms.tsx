@@ -1,10 +1,24 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { Notice } from "./notice";
+import { DailyMenuPicker } from "./daily-menu-picker";
+import { PlanRecommendations } from "./plan-recommendations";
 import { OrderVoiceInput } from "./order-voice-input";
 import type { VoiceOrderDraft } from "@/lib/order-voice";
 import { formatPhone, validPhone } from "@/lib/order-input";
-import { Plus, Trash2, Info, RefreshCw, Save, CheckCheck } from "lucide-react";
+import {
+  Plus,
+  Minus,
+  Trash2,
+  Info,
+  RefreshCw,
+  Save,
+  CheckCheck,
+  MoreHorizontal,
+  Package,
+  ChevronDown,
+  Sparkles,
+} from "lucide-react";
 import {
   FulfillmentPicker,
   MenuPicker,
@@ -501,12 +515,25 @@ export function PlanForm({
   date,
   plan,
   initial,
+  showPicker,
+  setShowPicker,
+  aiOpen,
+  setAiOpen,
+  recommend,
   save,
 }: {
   state: StoreState;
   date: string;
   plan?: Plan;
   initial?: Plan["lines"];
+  showPicker: boolean;
+  setShowPicker: (open: boolean) => void;
+  aiOpen: boolean;
+  setAiOpen: (open: boolean) => void;
+  recommend: (
+    lines: Plan["lines"],
+    signal: AbortSignal,
+  ) => Promise<{ lines: Plan["lines"]; questions: string[] }>;
   save: Save;
 }) {
   const [id] = useState(() => plan?.id || uid());
@@ -519,6 +546,22 @@ export function PlanForm({
         .map((r) => ({ productId: r.product.id, batches: r.batches })),
   );
   const usage = materialUsage(state, lines);
+  const reservationNeeds = requirements(state, date, false);
+  const materials = Object.entries(usage.usage)
+    .flatMap(([id, quantity]) => {
+      const material = state.materials.find((m) => m.id === id);
+      return material
+        ? [
+            {
+              material,
+              quantity,
+              shortage: Math.max(0, quantity - material.stock),
+            },
+          ]
+        : [];
+    })
+    .sort((a, b) => Number(b.shortage > 0) - Number(a.shortage > 0));
+  const shortages = materials.filter((m) => m.shortage > 0);
   const uncovered = requirements(state, date, false).filter((r) => {
     const line = lines.find((l) => l.productId === r.product.id);
     return (
@@ -534,10 +577,16 @@ export function PlanForm({
     );
   return (
     <form
+      className="plan-editor-form"
       onSubmit={async (e) => {
         e.preventDefault();
         const submitter = (e.nativeEvent as SubmitEvent)
           .submitter as HTMLButtonElement | null;
+        if (aiOpen) return;
+        if (showPicker) {
+          setShowPicker(false);
+          return;
+        }
         const status = submitter?.value === "confirmed" ? "confirmed" : "draft";
         setSaving(true);
         try {
@@ -548,184 +597,310 @@ export function PlanForm({
       }}
     >
       <fieldset disabled={saving}>
-        <div className="production-section-heading">
-          <span className="muted small">{lines.length}종 생산</span>
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => {
-              const recalculated = requirements(state, date)
-                .filter((r) => r.batches > 0)
-                .map((r) => ({ productId: r.product.id, batches: r.batches }));
+        {aiOpen ? (
+          <PlanRecommendations
+            state={state}
+            date={date}
+            lines={lines}
+            recommend={recommend}
+            onClose={() => setAiOpen(false)}
+            onApply={(additions) => {
               setLines([
-                ...recalculated,
-                ...lines.filter(
-                  (line) =>
-                    !recalculated.some((r) => r.productId === line.productId),
+                ...lines,
+                ...additions.filter(
+                  (a) => !lines.some((l) => l.productId === a.productId),
                 ),
               ]);
+              setAiOpen(false);
             }}
-          >
-            <RefreshCw size={16} aria-hidden="true" /> 필요 수량 다시 계산
-          </button>
-        </div>
-        <div className="plan-editor-list">
-          {lines.map((line, index) => {
-            const product = state.products.find((p) => p.id === line.productId);
-            return (
-              <div className="plan-editor-item" key={index}>
-                <div className="plan-editor-product">
-                  {product && <RiceThumbnail product={product} />}
-                  <label>
-                    <select
-                      aria-label={`생산 메뉴 ${index + 1}`}
-                      value={line.productId}
-                      onChange={(e) =>
-                        change(index, { productId: e.target.value })
-                      }
-                    >
-                      {state.products
-                        .filter((p) => !p.archived || p.id === line.productId)
-                        .map((p) => (
-                          <option
-                            key={p.id}
-                            value={p.id}
-                            disabled={lines.some(
-                              (other, i) =>
-                                i !== index && other.productId === p.id,
-                            )}
-                          >
-                            {p.name}
-                          </option>
-                        ))}
-                    </select>
-                    {product && (
-                      <small className="muted">
-                        {product.batchYield
-                          ? `${product.batchLabel}당 ${product.batchYield}개`
-                          : "생산 기준 등록 필요"}
-                      </small>
-                    )}
-                  </label>
+          />
+        ) : showPicker ? (
+          <>
+            <div className="plan-editor-scroll" key="picker">
+              <DailyMenuPicker
+                state={state}
+                date={date}
+                lines={lines}
+                onChange={setLines}
+              />
+            </div>
+            <div
+              className="form-footer button-row plan-editor-footer"
+              key="picker-footer"
+            >
+              <button
+                type="button"
+                className="button primary"
+                onClick={(event) => {
+                  event.preventDefault();
+                  setShowPicker(false);
+                }}
+              >
+                <CheckCheck size={17} /> 선택 완료 · {lines.length}종
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="plan-editor-scroll" key="editor">
+              <div className="production-section-heading">
+                <span className="muted small">{lines.length}종 생산</span>
+                <div className="plan-editor-tools">
                   <button
                     type="button"
-                    className="icon-button"
-                    aria-label={`생산 메뉴 ${index + 1} 삭제`}
-                    onClick={() =>
-                      setLines(lines.filter((_, i) => i !== index))
-                    }
+                    className="button secondary"
+                    disabled={lines.some(
+                      (l) =>
+                        !Number.isInteger(l.batches) ||
+                        l.batches < 1 ||
+                        l.batches > 100000,
+                    )}
+                    onClick={() => setAiOpen(true)}
                   >
-                    <Trash2 size={17} />
+                    <Sparkles size={16} /> AI 추가 추천
                   </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={!nextProduct}
+                    onClick={() => setShowPicker(true)}
+                  >
+                    <Plus size={16} /> 메뉴 추가
+                  </button>
+                  <details className="plan-editor-more">
+                    <summary aria-label="생산계획 추가 작업" title="추가 작업">
+                      <MoreHorizontal size={20} />
+                    </summary>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => {
+                        const recalculated = requirements(state, date)
+                          .filter((r) => r.batches > 0)
+                          .map((r) => ({
+                            productId: r.product.id,
+                            batches: r.batches,
+                          }));
+                        setLines([
+                          ...recalculated,
+                          ...lines.filter(
+                            (line) =>
+                              !recalculated.some(
+                                (r) => r.productId === line.productId,
+                              ),
+                          ),
+                        ]);
+                      }}
+                    >
+                      <RefreshCw size={16} aria-hidden="true" /> 필요 수량 다시
+                      계산
+                    </button>
+                  </details>
                 </div>
-                <div className="plan-editor-quantity">
-                  <label>
-                    <span>생산 단위 수</span>
-                    <div className="plan-batch-input">
-                      <input
-                        aria-label={`생산 단위 수 ${index + 1}`}
-                        type="number"
-                        min={1}
-                        max={100000}
-                        required
-                        value={line.batches || ""}
-                        onChange={(e) =>
-                          change(index, { batches: Number(e.target.value) })
-                        }
-                      />
-                      <span>× {product?.batchLabel}</span>
-                    </div>
-                  </label>
-                  <strong>
-                    {product?.batchYield
-                      ? `${(line.batches * product.batchYield).toLocaleString()}개`
-                      : "생산량 미등록"}
-                  </strong>
-                </div>
-                {line.reason && <p className="muted small">{line.reason}</p>}
               </div>
-            );
-          })}
-        </div>
-        <button
-          type="button"
-          className="add-order-menu"
-          disabled={!nextProduct}
-          onClick={() =>
-            nextProduct &&
-            setLines([...lines, { productId: nextProduct.id, batches: 1 }])
-          }
-        >
-          <Plus size={17} />
-          메뉴 추가
-        </button>
-        {(usage.issues.length > 0 || uncovered.length > 0) && (
-          <div className="callout vertical">
-            {usage.issues.map((issue) => (
-              <span key={issue}>{issue}</span>
-            ))}
-            {uncovered.map((r) => (
-              <span key={r.product.id}>
-                {r.product.name} 예약 수량이 부족해요. 가용 재고와 생산량을 합쳐{" "}
-                {r.pending.toLocaleString()}개가 필요합니다.
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="section-label">필요한 재료</div>
-        <div className="plan-material-preview">
-          {Object.entries(usage.usage).map(([materialId, quantity]) => {
-            const material = state.materials.find((m) => m.id === materialId);
-            if (!material) return null;
-            const shortage = Math.max(0, quantity - material.stock);
-            return (
-              <div key={materialId}>
-                <span>
-                  {material.name}
-                  <small>
-                    현재 {material.stock.toLocaleString()}
-                    {material.unit}
-                  </small>
-                </span>
-                <b>
-                  {quantity.toLocaleString()}
-                  {material.unit}
-                  {shortage > 0 && (
+              <div className="plan-editor-list">
+                {lines.map((line, index) => {
+                  const product = state.products.find(
+                    (p) => p.id === line.productId,
+                  );
+                  const reservation = reservationNeeds.find(
+                    (r) => r.product.id === line.productId,
+                  );
+                  const orderNeed = Math.max(
+                    0,
+                    (reservation?.pending || 0) - (reservation?.carry || 0),
+                  );
+                  const batchLabel = product?.batchLabel || "";
+                  const batchUnit = /^1\s*([^\d.\s].*)$/.exec(batchLabel)?.[1];
+                  return (
+                    <div
+                      className={`plan-editor-item${product?.displayTarget ? " standing-menu" : ""}`}
+                      key={line.productId}
+                    >
+                      <div className="plan-editor-product">
+                        {product && <RiceThumbnail product={product} />}
+                        <div className="plan-editor-name">
+                          <strong>{product?.name || "미등록 메뉴"}</strong>
+                          {!!product?.displayTarget && (
+                            <small className="standing-menu-label">
+                              상시 진열
+                            </small>
+                          )}
+                          {orderNeed > 0 && (
+                            <small className="muted">
+                              주문 생산 {orderNeed.toLocaleString()}개
+                            </small>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          aria-label={`${product?.name || index + 1} 생산 메뉴 삭제`}
+                          onClick={() =>
+                            setLines(lines.filter((_, i) => i !== index))
+                          }
+                        >
+                          <Trash2 size={17} />
+                        </button>
+                      </div>
+                      <div className="plan-editor-quantity">
+                        <div
+                          className="plan-batch-input"
+                          role="group"
+                          aria-label={`${product?.name} 생산량 조절`}
+                        >
+                          <button
+                            type="button"
+                            className="icon-button"
+                            aria-label={`${product?.name} 생산량 줄이기`}
+                            disabled={line.batches <= 1}
+                            onClick={() =>
+                              change(index, {
+                                batches: Math.max(1, line.batches - 1),
+                              })
+                            }
+                          >
+                            <Minus size={16} />
+                          </button>
+                          <div className="plan-batch-value">
+                            <input
+                              aria-label={`${product?.name} 생산량`}
+                              type="number"
+                              min={1}
+                              max={100000}
+                              required
+                              value={line.batches || ""}
+                              onChange={(e) =>
+                                change(index, {
+                                  batches: Number(e.target.value),
+                                })
+                              }
+                            />
+                            <span>{batchUnit || `× ${batchLabel}`}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            aria-label={`${product?.name} 생산량 늘리기`}
+                            disabled={line.batches >= 100000}
+                            onClick={() =>
+                              change(index, {
+                                batches: Math.min(100000, line.batches + 1),
+                              })
+                            }
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                        <strong>
+                          {product?.batchYield
+                            ? `${(line.batches * product.batchYield).toLocaleString()}개`
+                            : "생산량 미등록"}
+                        </strong>
+                      </div>
+                      {line.reason && (
+                        <p className="muted small">{line.reason}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                className="add-order-menu"
+                disabled={!nextProduct}
+                onClick={() => setShowPicker(true)}
+              >
+                <Plus size={17} />
+                메뉴 추가
+              </button>
+              {(usage.issues.length > 0 || uncovered.length > 0) && (
+                <div className="callout vertical">
+                  {usage.issues.map((issue) => (
+                    <span key={issue}>{issue}</span>
+                  ))}
+                  {uncovered.map((r) => (
+                    <span key={r.product.id}>
+                      {r.product.name} 예약 수량이 부족해요. 가용 재고와
+                      생산량을 합쳐 {r.pending.toLocaleString()}개가 필요합니다.
+                    </span>
+                  ))}
+                </div>
+              )}
+              <details
+                className="plan-material-details"
+                key={shortages.map((m) => m.material.id).join(",")}
+                open={shortages.length > 0 || undefined}
+              >
+                <summary>
+                  <Package size={17} />
+                  <span>필요 재료 {materials.length}종</span>
+                  {shortages.length > 0 && (
                     <small className="danger-text">
-                      {shortage.toLocaleString()}
-                      {material.unit} 부족
+                      {shortages.length}종 부족
                     </small>
                   )}
-                </b>
-              </div>
-            );
-          })}
-        </div>
-        {Object.keys(usage.usage).length === 0 && (
-          <p className="muted small">
-            등록한 레시피가 있는 메뉴를 선택해 주세요.
-          </p>
+                  <ChevronDown size={16} />
+                </summary>
+                <div className="plan-material-preview">
+                  {materials.map(({ material, quantity, shortage }) => {
+                    return (
+                      <div key={material.id}>
+                        <span>
+                          {material.name}
+                          <small>
+                            현재 {material.stock.toLocaleString()}
+                            {material.unit}
+                          </small>
+                        </span>
+                        <b>
+                          {quantity.toLocaleString()}
+                          {material.unit}
+                          {shortage > 0 && (
+                            <small className="danger-text">
+                              {shortage.toLocaleString()}
+                              {material.unit} 부족
+                            </small>
+                          )}
+                        </b>
+                      </div>
+                    );
+                  })}
+                </div>
+                {Object.keys(usage.usage).length === 0 && (
+                  <p className="muted small">
+                    등록한 레시피가 있는 메뉴를 선택해 주세요.
+                  </p>
+                )}
+              </details>
+            </div>
+            <div
+              className="form-footer button-row plan-editor-footer"
+              key="editor-footer"
+            >
+              <button
+                className="button secondary"
+                type="submit"
+                value="draft"
+                disabled={!lines.length}
+              >
+                <Save size={16} aria-hidden="true" /> 초안 저장
+              </button>
+              <button
+                className="button primary"
+                type="submit"
+                value="confirmed"
+                disabled={
+                  !lines.length ||
+                  usage.issues.length > 0 ||
+                  uncovered.length > 0
+                }
+              >
+                <CheckCheck size={16} aria-hidden="true" /> 계획 확정
+              </button>
+            </div>
+          </>
         )}
-        <div className="form-footer button-row plan-editor-footer">
-          <button
-            className="button secondary"
-            type="submit"
-            value="draft"
-            disabled={!lines.length}
-          >
-            <Save size={16} aria-hidden="true" /> 초안 저장
-          </button>
-          <button
-            className="button primary"
-            type="submit"
-            value="confirmed"
-            disabled={
-              !lines.length || usage.issues.length > 0 || uncovered.length > 0
-            }
-          >
-            <CheckCheck size={16} aria-hidden="true" /> 계획 확정
-          </button>
-        </div>
       </fieldset>
     </form>
   );

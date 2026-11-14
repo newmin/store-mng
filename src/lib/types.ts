@@ -170,6 +170,19 @@ export const commandSchema = z.discriminatedUnion("type", [
     status: z.enum(["reserved", "picked", "cancelled"]),
   }),
   z.object({ type: z.literal("saveProduct"), product: productSchema }),
+  z.object({
+    type: z.literal("saveDisplayMenus"),
+    targets: z
+      .array(
+        z.object({
+          productId: id,
+          expectedTarget: z.number().int().min(0).max(100000),
+          displayTarget: z.number().int().min(0).max(100000),
+        }),
+      )
+      .min(1)
+      .max(1000),
+  }),
   z.object({ type: z.literal("saveMaterial"), material: materialSchema }),
   z.object({
     type: z.literal("adjustStock"),

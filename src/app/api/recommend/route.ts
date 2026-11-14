@@ -45,11 +45,25 @@ export async function POST(req: Request) {
     const raw = await req.text();
     if (raw.length > 2000000)
       throw new HttpError("추천 데이터가 너무 많습니다.", 413);
-    const { date, version, snapshot } = z
+    const {
+      date,
+      version,
+      snapshot,
+      currentLines = [],
+    } = z
       .object({
         date: daySchema,
         version: z.number().int().nonnegative(),
         snapshot: z.unknown().optional(),
+        currentLines: z
+          .array(
+            z.object({
+              productId: z.string().min(1).max(100),
+              batches: z.number().int().min(1).max(100000),
+            }),
+          )
+          .max(100)
+          .optional(),
       })
       .parse(JSON.parse(raw));
     const current = ctx
@@ -64,6 +78,14 @@ export async function POST(req: Request) {
         409,
       );
     const state = current.document;
+    if (
+      new Set(currentLines.map((l) => l.productId)).size !==
+        currentLines.length ||
+      currentLines.some(
+        (l) => !state.products.some((p) => p.id === l.productId),
+      )
+    )
+      throw new HttpError("작성 중인 메뉴를 확인해 주세요.");
     if (!state.settings.initialized)
       throw new HttpError("설정에서 추천 기준을 먼저 저장하세요.");
     if (!process.env.OPENAI_API_KEY)
@@ -174,7 +196,7 @@ export async function POST(req: Request) {
             "AI가 필수 검증을 완료하지 못했습니다. 수동 계획을 사용하세요.",
             502,
           );
-        const result = check(state, date, parsed.lines);
+        const result = check(state, date, parsed.lines, currentLines);
         if (!result.valid && parsed.lines.length)
           throw new HttpError(
             `추천안을 적용할 수 없습니다: ${result.errors.join(", ")}`,
@@ -198,7 +220,10 @@ export async function POST(req: Request) {
             output = {
               date,
               settings: state.settings,
-              candidates: fallbackCandidates(state, date),
+              candidates: fallbackCandidates(state, date).filter(
+                (p) => !currentLines.some((l) => l.productId === p.id),
+              ),
+              currentPlan: currentLines,
               demand: requirements(state, date).map((r) => ({
                 name: r.product.name,
                 reserved: r.reserved,
@@ -227,7 +252,7 @@ export async function POST(req: Request) {
                   .max(10),
               })
               .parse(JSON.parse(call.arguments));
-            output = check(state, date, a.lines);
+            output = check(state, date, a.lines, currentLines);
           } else output = { error: "허용되지 않은 도구" };
         } catch {
           output = { error: "도구 입력을 확인하세요." };

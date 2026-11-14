@@ -39,6 +39,7 @@ import {
   List,
   Clock3,
   ListFilter,
+  Store,
 } from "lucide-react";
 import { addDays, koreanDate, today, uid } from "@/lib/dates";
 import {
@@ -60,6 +61,7 @@ import { OrderCalendar } from "./order-calendar";
 import { calendarPeriod, type CalendarView } from "@/lib/order-calendar";
 import { BackToTop } from "./back-to-top";
 import { MenuManager } from "./menu-manager";
+import { DisplayMenuWorkspace } from "./display-menu-workspace";
 import type { ProductSection } from "./product-form";
 import { ProductionWorkspace } from "./production-workspace";
 import { RecommendationLoading } from "./recommendation-loading";
@@ -82,6 +84,7 @@ type View =
   | "home"
   | "orders"
   | "production"
+  | "display"
   | "inventory"
   | "closing"
   | "settings"
@@ -92,7 +95,13 @@ type Modal =
   | { type: "product"; product?: Product; section?: ProductSection }
   | { type: "material"; material?: Material; kind: "ingredient" | "supply" }
   | { type: "stock"; material: Material }
-  | { type: "plan"; plan?: Plan; initial?: Plan["lines"] }
+  | {
+      type: "plan";
+      plan?: Plan;
+      initial?: Plan["lines"];
+      pickerOpen?: boolean;
+      aiOpen?: boolean;
+    }
   | { type: "complete"; plan: Plan }
   | { type: "close"; lot: Lot }
   | { type: "recommend"; lines: Plan["lines"]; questions: string[] }
@@ -102,6 +111,7 @@ const navigation = [
   { id: "home" as const, label: "오늘의 매장", icon: LayoutDashboard },
   { id: "orders" as const, label: "주문 예약장", icon: CalendarDays },
   { id: "production" as const, label: "생산계획", icon: CookingPot },
+  { id: "display" as const, label: "상시 진열", icon: Store },
   { id: "inventory" as const, label: "재료 · 비품", icon: Package },
   { id: "closing" as const, label: "마감 기록", icon: ClipboardList },
   { id: "settings" as const, label: "매장 설정", icon: Settings },
@@ -240,6 +250,7 @@ export default function StoreApp() {
     }
   }
   const [stickerEditing, setStickerEditing] = useState(false);
+  const [displayEditing, setDisplayEditing] = useState(false);
   const [stickerHeader, setStickerHeader] = useState<StickerHeader>({
     title: "스티커",
     back: null,
@@ -247,6 +258,14 @@ export default function StoreApp() {
   });
   const [stickerOrderId, setStickerOrderId] = useState<string>();
   function setView(next: View) {
+    if (
+      next !== view &&
+      view === "display" &&
+      (busy ||
+        (displayEditing &&
+          !confirm("저장하지 않은 상시 진열 메뉴 변경을 닫을까요?")))
+    )
+      return;
     if (
       next !== view &&
       stickerEditing &&
@@ -271,7 +290,15 @@ export default function StoreApp() {
     return () => data?.subscription.unsubscribe();
   }, []);
   useEffect(() => {
-    if (!sharedMode || !user || modal || busy || stickerEditing || thinking)
+    if (
+      !sharedMode ||
+      !user ||
+      modal ||
+      busy ||
+      stickerEditing ||
+      displayEditing ||
+      thinking
+    )
       return;
     const handler = () => {
       if (document.visibilityState === "visible") void refresh();
@@ -282,7 +309,7 @@ export default function StoreApp() {
       clearInterval(id);
       window.removeEventListener("focus", handler);
     };
-  }, [user, modal, busy, refresh, stickerEditing, thinking]);
+  }, [user, modal, busy, refresh, stickerEditing, displayEditing, thinking]);
   useEffect(() => () => recommendationRequest.current?.abort(), []);
   const open = (m: Modal) => {
     setError("");
@@ -351,6 +378,33 @@ export default function StoreApp() {
     recommendationRequest.current?.abort();
     recommendationRequest.current = null;
     setThinking(false);
+  }
+  async function recommendAdditional(
+    currentLines: Plan["lines"],
+    signal: AbortSignal,
+  ) {
+    if (!state) throw new Error("매장 정보를 불러오세요.");
+    const revision = state.revision;
+    const requestedVersion = sharedMode ? version : revision;
+    const result = await authFetch("/api/recommend", {
+      method: "POST",
+      signal,
+      body: JSON.stringify({
+        date,
+        version: requestedVersion,
+        currentLines,
+        ...(!sharedMode
+          ? { snapshot: recommendationContext(state, date) }
+          : {}),
+      }),
+    });
+    if (signal.aborted) throw new Error("추천을 취소했습니다.");
+    if (
+      result.version !== requestedVersion ||
+      latestRevision.current !== revision
+    )
+      throw new Error("주문·재고가 변경됐습니다. 다시 추천받으세요.");
+    return result as { lines: Plan["lines"]; questions: string[] };
   }
   if (!ready)
     return (
@@ -792,6 +846,7 @@ export default function StoreApp() {
               />
             )}
           {view !== "settings" &&
+            view !== "display" &&
             view !== "stickers" &&
             (view !== "orders" || ordersView === "list") && (
               <div className="date-toolbar">
@@ -1125,6 +1180,12 @@ export default function StoreApp() {
           )}
           {view === "production" && (
             <>
+              <button
+                className="button secondary"
+                onClick={() => setView("display")}
+              >
+                <Store size={18} /> 상시 진열 메뉴 관리
+              </button>
               {!sharedMode && (
                 <p className="callout">
                   말랑콩떡 체험 데이터입니다. 레시피·재고·생산 및 마감 기록은
@@ -1461,8 +1522,25 @@ export default function StoreApp() {
               </section>
             </>
           )}
+          {view === "display" && (
+            <DisplayMenuWorkspace
+              state={state}
+              busy={busy}
+              onDirtyChange={setDisplayEditing}
+              save={async (command) => {
+                await run(command);
+                setToast("상시 진열 메뉴를 저장했습니다.");
+              }}
+            />
+          )}
           {view === "settings" && (
             <>
+              <button
+                className="button secondary"
+                onClick={() => setView("display")}
+              >
+                <Store size={18} /> 상시 진열 메뉴 관리
+              </button>
               <button
                 className="button secondary"
                 onClick={() => setView("stickers")}
@@ -1596,7 +1674,10 @@ export default function StoreApp() {
       </div>
       <nav className="mobile-nav">
         {navigation
-          .filter((n) => n.id !== "settings" && n.id !== "stickers")
+          .filter(
+            (n) =>
+              n.id !== "settings" && n.id !== "stickers" && n.id !== "display",
+          )
           .map((n) => (
             <button
               key={n.id}
@@ -1618,7 +1699,7 @@ export default function StoreApp() {
             </button>
           ))}
         <button
-          className={view === "settings" ? "active" : ""}
+          className={view === "settings" || view === "display" ? "active" : ""}
           onClick={() => setView("settings")}
         >
           <Settings size={20} />
@@ -1677,7 +1758,20 @@ export default function StoreApp() {
                                 : "AI 메뉴 추천 결과"
           }
           busy={busy || productSaving}
-          onClose={() => setModal(null)}
+          onClose={() => {
+            if (modal.type === "plan" && modal.aiOpen) {
+              setModal({ ...modal, aiOpen: false });
+              return;
+            }
+            if (
+              modal.type === "plan" &&
+              (modal.pickerOpen ?? (!modal.plan && !modal.initial))
+            ) {
+              setModal({ ...modal, pickerOpen: false });
+            } else {
+              setModal(null);
+            }
+          }}
         >
           {error && <Notice message={error} onDismiss={() => setError("")} />}
           {modal.type === "message" &&
@@ -1750,6 +1844,21 @@ export default function StoreApp() {
               date={date}
               plan={modal.plan}
               initial={modal.initial}
+              aiOpen={!!modal.aiOpen}
+              setAiOpen={(aiOpen) =>
+                setModal((current) =>
+                  current?.type === "plan" ? { ...current, aiOpen } : current,
+                )
+              }
+              recommend={recommendAdditional}
+              showPicker={modal.pickerOpen ?? (!modal.plan && !modal.initial)}
+              setShowPicker={(pickerOpen) =>
+                setModal((current) =>
+                  current?.type === "plan"
+                    ? { ...current, pickerOpen }
+                    : current,
+                )
+              }
               save={save}
             />
           )}

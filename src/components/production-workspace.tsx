@@ -3,12 +3,12 @@
 import {
   CheckCheck,
   ChevronDown,
-  CookingPot,
   Pencil,
   Plus,
   Sparkles,
   TriangleAlert,
   Package,
+  Store,
 } from "lucide-react";
 import { recipeIssue, requirements, simulate } from "@/lib/calculations";
 import { koreanDate } from "@/lib/dates";
@@ -88,11 +88,22 @@ export function ProductionWorkspace({
     const issue = recipeIssue(product, state);
     const planned = lines.find((l) => l.productId === product.id);
     return (
-      <details className="production-menu" key={product.id}>
+      <details
+        className={`production-menu${product.displayTarget > 0 ? " standing-menu" : ""}`}
+        key={product.id}
+      >
         <summary className="production-menu-main">
           <RiceThumbnail product={product} />
           <div className="production-menu-name">
             <h3>{product.name}</h3>
+            {product.displayTarget > 0 && (
+              <small className="standing-menu-label">상시 진열</small>
+            )}
+            {row && row.pending > row.carry && (
+              <small className="production-order-need">
+                주문 생산 {number(row.pending - row.carry)}개
+              </small>
+            )}
             <span className={issue ? "production-menu-warning" : undefined}>
               {batches === undefined
                 ? issue || "생산 기준 등록 필요"
@@ -196,8 +207,8 @@ export function ProductionWorkspace({
                 disabled={busy}
                 onClick={onEdit}
               >
-                <Pencil size={16} />
-                계획 수정
+                <Store size={16} />
+                진열 메뉴 · 계획 수정
               </button>
             )}
             {!past &&
@@ -216,12 +227,12 @@ export function ProductionWorkspace({
                   disabled={busy || !state.products.length}
                   onClick={onEdit}
                 >
-                  <CookingPot size={17} />
+                  <Store size={17} />
                   {stale
                     ? "검토 · 다시 확정"
                     : plan
                       ? "계획 검토 · 확정"
-                      : "생산계획 작성"}
+                      : "진열 메뉴 고르기"}
                 </button>
               ))}
           </div>
@@ -430,7 +441,15 @@ export function ProductionWorkspace({
             <tbody>
               {req.map((r) => (
                 <tr key={r.product.id}>
-                  <td>{r.product.name}</td>
+                  <td>
+                    {r.product.name}
+                    {r.product.displayTarget > 0 && (
+                      <small className="standing-menu-label">
+                        {" "}
+                        · 상시 진열
+                      </small>
+                    )}
+                  </td>
                   <td>{number(r.pending)}개</td>
                   <td>{number(r.carry)}개</td>
                   <td>{number(r.product.displayTarget)}개</td>
@@ -444,8 +463,7 @@ export function ProductionWorkspace({
                       className="text-button"
                       onClick={() => onProduct(r.product)}
                     >
-                      {r.issue ||
-                        `${r.product.batchYield}개 / ${r.product.batchLabel}`}
+                      {r.issue || "기준 수정"}
                     </button>
                   </td>
                 </tr>

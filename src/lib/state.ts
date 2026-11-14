@@ -429,6 +429,22 @@ export function applyCommand(
       message = `${c.product.name} 생산 기준 저장`;
       break;
     }
+    case "saveDisplayMenus": {
+      if (new Set(c.targets.map((t) => t.productId)).size !== c.targets.length)
+        throw new Error("같은 메뉴를 중복 선택할 수 없습니다.");
+      for (const target of c.targets) {
+        const product = findProduct(target.productId);
+        if (product.displayTarget !== target.expectedTarget)
+          throw new Error(`${product.name} 진열 목표가 변경됐습니다. 변경 취소 후 다시 선택해 주세요.`);
+        if (target.displayTarget > 0 && (!product.active || product.archived))
+          throw new Error(`${product.name}: 판매 중인 메뉴만 상시 진열할 수 있습니다.`);
+      }
+      for (const target of c.targets)
+        findProduct(target.productId).displayTarget = target.displayTarget;
+      invalidate();
+      message = `상시 진열 메뉴 ${c.targets.length}종 변경`;
+      break;
+    }
     case "saveMaterial": {
       const old = s.materials.find((m) => m.id === c.material.id);
       if (old && (old.unit !== c.material.unit || old.kind !== c.material.kind))

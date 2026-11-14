@@ -10,6 +10,7 @@ import "./brand.css";
 import "./sidebar.css";
 import "./menu-catalog.css";
 import "./production.css";
+import "./display-menu.css";
 import "./menu-manager.css";
 import "./stickers.css";
 export const metadata: Metadata = {

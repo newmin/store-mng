@@ -9,6 +9,35 @@ function base() {
   return s;
 }
 describe("AI 추천의 결정적 검증", () => {
+  it("편집 중에 선택한 메뉴를 추가 추천하지 않는다", () => {
+    const s = base();
+    expect(
+      validateRecommendations(
+        s,
+        today(),
+        [{ productId: "mugwort", batches: 1 }],
+        [{ productId: "mugwort", batches: 1 }],
+      ).errors,
+    ).toContain("설정 또는 후보 메뉴 위반");
+  });
+  it("편집 중인 생산량이 쓸 재료를 확보한 뒤 추가 추천을 검증한다", () => {
+    const s = base();
+    expect(
+      validateRecommendations(s, today(), [
+        { productId: "mugwort", batches: 1 },
+      ]).valid,
+    ).toBe(true);
+    const result = validateRecommendations(
+      s,
+      today(),
+      [{ productId: "mugwort", batches: 1 }],
+      [{ productId: "white", batches: 100000 }],
+    );
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.includes("재고 부족"))).toBe(
+      true,
+    );
+  });
   it("등록된 후보와 설정된 생산량만 허용한다", () => {
     const s = base();
     expect(

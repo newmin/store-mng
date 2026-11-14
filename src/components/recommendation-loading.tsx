@@ -11,19 +11,23 @@ import {
 } from "lucide-react";
 import { fallbackCandidates, requirements } from "@/lib/calculations";
 import { addDays, koreanDate } from "@/lib/dates";
-import type { StoreState } from "@/lib/types";
+import type { Plan, StoreState } from "@/lib/types";
 
 export function RecommendationLoading({
   state,
   date,
   onCancel,
+  currentLines = [],
 }: {
   state: StoreState;
   date: string;
   onCancel: () => void;
+  currentLines?: Plan["lines"];
 }) {
   const settings = state.settings;
-  const candidates = fallbackCandidates(state, date);
+  const candidates = fallbackCandidates(state, date).filter(
+    (p) => !currentLines.some((l) => l.productId === p.id),
+  );
   const demand = requirements(state, date);
   const pending = state.orders.filter(
     (order) => order.date === date && order.status === "reserved",
@@ -46,6 +50,18 @@ export function RecommendationLoading({
         이번 추천에 적용하는 조건
       </h3>
       <ul className="recommendation-conditions">
+        {currentLines.length > 0 && (
+          <li>
+            <CookingPot size={19} aria-hidden="true" />
+            <div>
+              <strong>작성 중인 메뉴 {currentLines.length}종 고려</strong>
+              <p>
+                선택한 메뉴를 후보에서 제외하고, 입력한 생산량에 필요한 재료까지
+                함께 확인합니다.
+              </p>
+            </div>
+          </li>
+        )}
         <li>
           <ClipboardList size={19} aria-hidden="true" />
           <div>

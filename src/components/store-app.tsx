@@ -53,6 +53,7 @@ import { useStore } from "@/lib/use-store";
 import { authFetch, sharedMode, supabase } from "@/lib/client";
 import { recommendationContext } from "@/lib/recommendation-context";
 import { brand } from "@/lib/brand";
+import { confirmAction, promptAction } from "@/lib/app-dialog";
 import { Notice } from "./notice";
 import { BrandMark, BrandWelcome } from "./store-brand";
 import { OrderMessage } from "./order-message";
@@ -276,19 +277,29 @@ export default function StoreApp() {
     busy: false,
   });
   const [stickerOrderId, setStickerOrderId] = useState<string>();
-  function setView(next: View) {
+  async function setView(next: View) {
     if (
       next !== view &&
       view === "display" &&
       (busy ||
         (displayEditing &&
-          !confirm("저장하지 않은 상시 진열 메뉴 변경을 닫을까요?")))
+          !(await confirmAction({
+            message: "저장하지 않은 상시 진열 메뉴 변경이 사라집니다.",
+            destructive: true,
+            confirmLabel: "변경 버리기",
+            cancelLabel: "계속 편집",
+          }))))
     )
       return;
     if (
       next !== view &&
       stickerEditing &&
-      !confirm("저장하지 않은 스티커 편집을 닫을까요?")
+      !(await confirmAction({
+        message: "저장하지 않은 스티커 편집 내용이 사라집니다.",
+        destructive: true,
+        confirmLabel: "변경 버리기",
+        cancelLabel: "계속 편집",
+      }))
     )
       return;
     if (next !== "stickers") setStickerOrderId(undefined);
@@ -1919,7 +1930,7 @@ export default function StoreApp() {
                                 : "AI 메뉴 추천 결과"
           }
           busy={busy || productSaving}
-          onClose={() => {
+          onClose={async () => {
             if (modal.type === "plan" && modal.aiOpen) {
               setModal({ ...modal, aiOpen: false });
               return;
@@ -1930,7 +1941,15 @@ export default function StoreApp() {
             ) {
               setModal({ ...modal, pickerOpen: false });
             } else {
-              if (modalDirty && !confirm("저장하지 않은 변경사항을 닫을까요?"))
+              if (
+                modalDirty &&
+                !(await confirmAction({
+                  message: "저장하지 않은 변경사항이 사라집니다.",
+                  destructive: true,
+                  confirmLabel: "변경 버리기",
+                  cancelLabel: "계속 편집",
+                }))
+              )
                 return;
               setModalDirty(false);
               setModal(null);
@@ -1967,9 +1986,15 @@ export default function StoreApp() {
                   type="button"
                   className="text-button danger-text order-cancel"
                   disabled={busy}
-                  onClick={() => {
+                  onClick={async () => {
                     if (
-                      confirm(`${modal.order!.customer}님의 주문을 취소할까요?`)
+                      await confirmAction({
+                        title: "주문을 취소할까요?",
+                        message: `${modal.order!.customer}님의 예약 주문을 취소합니다.`,
+                        destructive: true,
+                        confirmLabel: "주문 취소",
+                        cancelLabel: "예약 유지",
+                      })
                     )
                       void save({
                         type: "orderStatus",
@@ -2237,9 +2262,13 @@ function Login({
               type="button"
               disabled={busy}
               onClick={async () => {
-                const email = prompt(
-                  "비밀번호 재설정 링크를 받을 이메일을 입력하세요.",
-                );
+                const email = await promptAction({
+                  title: "비밀번호 재설정",
+                  message: "재설정 링크를 받을 이메일을 입력해 주세요.",
+                  inputLabel: "이메일",
+                  inputType: "email",
+                  confirmLabel: "링크 받기",
+                });
                 if (!email || !supabase) return;
                 setBusy(true);
                 try {

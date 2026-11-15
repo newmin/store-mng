@@ -4,6 +4,9 @@ import { GET } from "../src/app/api/version/route";
 
 const { effect } = vi.hoisted(() => ({ effect: vi.fn() }));
 vi.mock("react", () => ({ useEffect: effect }));
+vi.mock("@/lib/app-dialog", () => ({
+  confirmAction: (...args: unknown[]) => confirm(...args),
+}));
 let cleanup: (() => void) | undefined;
 let visibility: string;
 let page: EventTarget;

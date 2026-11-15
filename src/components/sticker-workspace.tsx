@@ -25,6 +25,7 @@ import {
   Save,
 } from "lucide-react";
 import { uid } from "@/lib/dates";
+import { confirmAction } from "@/lib/app-dialog";
 import { formtecPapers, makeFormtecFile } from "@/lib/formtec";
 import { resolveMenuImage, uploadMenuImage } from "@/lib/menu-image-client";
 import {
@@ -271,12 +272,8 @@ export function StickerWorkspace({
       title: tab === "templates" ? "템플릿" : "스티커",
       busy: working,
       back: editorActive
-        ? () => {
-            if (
-              working ||
-              (dirty && !confirm("저장하지 않은 변경을 버릴까요?"))
-            )
-              return;
+        ? async () => {
+            if (working || (dirty && !(await discard()))) return;
             setEditorActive(false);
             setDirty(false);
             setPanelOpen(false);
@@ -374,11 +371,19 @@ export function StickerWorkspace({
     });
     setDirty(true);
   }
-  function discard() {
-    return !dirty || confirm("저장하지 않은 변경을 버릴까요?");
+  async function discard() {
+    return (
+      !dirty ||
+      (await confirmAction({
+        message: "저장하지 않은 스티커 변경사항이 사라집니다.",
+        destructive: true,
+        confirmLabel: "변경 버리기",
+        cancelLabel: "계속 편집",
+      }))
+    );
   }
-  function loadDesign(saved: StickerDesign, existingOrder = false) {
-    if (!discard()) return false;
+  async function loadDesign(saved: StickerDesign, existingOrder = false) {
+    if (!(await discard())) return false;
     setDesign(structuredClone(saved));
     setSelectedImageId(
       stickerImages(saved, assets.find((a) => a.id === saved.assetId)?.image)[0]
@@ -391,8 +396,8 @@ export function StickerWorkspace({
     setPanelOpen(false);
     return true;
   }
-  function switchTab(next: "stickers" | "templates") {
-    if (next === tab || !discard()) return;
+  async function switchTab(next: "stickers" | "templates") {
+    if (next === tab || !(await discard())) return;
     setTab(next);
     setDirty(false);
     setTag("");
@@ -400,12 +405,12 @@ export function StickerWorkspace({
     setSavedOrder(false);
     setEditorActive(false);
   }
-  function selectTemplate(id: string) {
+  async function selectTemplate(id: string) {
     const template = templates.find((t) => t.id === id);
     if (!template) return;
     const order = state.orders.find((o) => o.id === design.orderId);
     if (
-      loadDesign({
+      await loadDesign({
         ...orderFromTemplate(template, uid()),
         ...(order
           ? {
@@ -418,9 +423,17 @@ export function StickerWorkspace({
     )
       setTemplateId(id);
   }
-  function importOrderText(id: string) {
+  async function importOrderText(id: string) {
     const order = state.orders.find((o) => o.id === id);
-    if (order && design.text && !confirm("현재 문구를 주문 문구로 바꿀까요?"))
+    if (
+      order &&
+      design.text &&
+      !(await confirmAction({
+        title: "주문 문구를 가져올까요?",
+        message: "현재 작성한 문구를 선택한 주문의 문구로 바꿉니다.",
+        confirmLabel: "문구 바꾸기",
+      }))
+    )
       return;
     const copyForOrder = savedOrder && order && order.id !== design.orderId;
     if (copyForOrder) setSavedOrder(false);
@@ -1314,8 +1327,8 @@ export function StickerWorkspace({
             <button
               className="button secondary"
               disabled={working}
-              onClick={() => {
-                if (loadDesign(orderFromTemplate(templates[0], uid())))
+              onClick={async () => {
+                if (await loadDesign(orderFromTemplate(templates[0], uid())))
                   setTemplateId(templates[0].id);
               }}
             >
@@ -1328,8 +1341,8 @@ export function StickerWorkspace({
                 <button
                   key={d.id}
                   disabled={working}
-                  onClick={() => {
-                    if (loadDesign(d, true)) setTemplateId("");
+                  onClick={async () => {
+                    if (await loadDesign(d, true)) setTemplateId("");
                   }}
                 >
                   <span>

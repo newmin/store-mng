@@ -737,7 +737,7 @@ export function PlanForm({
                 <div className="plan-editor-tools">
                   <button
                     type="button"
-                    className="button secondary"
+                    className="button primary"
                     disabled={lines.some(
                       (l) =>
                         !Number.isInteger(l.batches) ||

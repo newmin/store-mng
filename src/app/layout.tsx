@@ -3,6 +3,8 @@ import type { CSSProperties } from "react";
 import { themeVariables } from "@/lib/theme";
 import { brand } from "@/lib/brand";
 import { AppUpdateChecker } from "@/components/app-update-checker";
+import { AppDialog } from "@/components/app-dialog";
+import "./app-dialog.css";
 import "./globals.css";
 import "./order-pickers.css";
 import "./order-calendar.css";
@@ -34,6 +36,7 @@ export default function RootLayout({
       <body>
         <AppUpdateChecker />
         {children}
+        <AppDialog />
       </body>
     </html>
   );

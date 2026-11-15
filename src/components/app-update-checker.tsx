@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { confirmAction } from "@/lib/app-dialog";
 
 export function AppUpdateChecker() {
   useEffect(() => {
@@ -32,9 +33,14 @@ export function AppUpdateChecker() {
           return;
 
         if (
-          window.confirm(
-            "새 버전이 있습니다. 새로고침할까요?\n저장하지 않은 내용은 사라질 수 있습니다.",
-          )
+          (await confirmAction({
+            title: "새 버전이 준비됐어요",
+            message:
+              "새로고침하면 최신 버전을 사용할 수 있습니다.\n저장하지 않은 내용은 사라질 수 있습니다.",
+            confirmLabel: "새로고침",
+            cancelLabel: "나중에",
+          })) &&
+          !disposed
         )
           window.location.reload();
       } catch {

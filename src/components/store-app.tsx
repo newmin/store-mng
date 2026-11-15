@@ -67,7 +67,15 @@ import { ProductionWorkspace } from "./production-workspace";
 import { RecommendationLoading } from "./recommendation-loading";
 import { StickerWorkspace, type StickerHeader } from "./sticker-workspace";
 import { fulfillmentLabel } from "@/lib/order-message";
-import type { Command, Material, Order, Plan, Product, Lot } from "@/lib/types";
+import type {
+  Command,
+  Material,
+  Order,
+  Plan,
+  Product,
+  Lot,
+  Closing,
+} from "@/lib/types";
 import {
   CloseForm,
   CompleteForm,
@@ -103,7 +111,7 @@ type Modal =
       aiOpen?: boolean;
     }
   | { type: "complete"; plan: Plan }
-  | { type: "close"; lot: Lot }
+  | { type: "close"; lot: Lot; closing?: Closing }
   | { type: "recommend"; lines: Plan["lines"]; questions: string[] }
   | { type: "image"; path: string }
   | { type: "settings" };
@@ -251,6 +259,17 @@ export default function StoreApp() {
   }
   const [stickerEditing, setStickerEditing] = useState(false);
   const [displayEditing, setDisplayEditing] = useState(false);
+  const [modalDirty, setModalDirty] = useState(false);
+  const [searchAll, setSearchAll] = useState(true);
+  const [inventoryQuery, setInventoryQuery] = useState("");
+  const [shortOnly, setShortOnly] = useState(false);
+  const [settingsTab, setSettingsTab] = useState("menus");
+  useEffect(() => {
+    if (!modalDirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [modalDirty]);
   const [stickerHeader, setStickerHeader] = useState<StickerHeader>({
     title: "스티커",
     back: null,
@@ -312,12 +331,14 @@ export default function StoreApp() {
   }, [user, modal, busy, refresh, stickerEditing, displayEditing, thinking]);
   useEffect(() => () => recommendationRequest.current?.abort(), []);
   const open = (m: Modal) => {
+    setModalDirty(false);
     setError("");
     setModal(m);
   };
   async function save(c: Command) {
     try {
       await run(c);
+      setModalDirty(false);
       setModal(
         c.type === "saveOrder" && modal?.type === "order" && !modal.order
           ? { type: "message", orderId: c.order.id }
@@ -436,6 +457,16 @@ export default function StoreApp() {
       (statusFilter === "all" || o.status === statusFilter) &&
       (!query || `${o.customer} ${o.phone} ${o.sticker}`.includes(query)),
   );
+  const searchedOrders = (query && searchAll ? state.orders : orders)
+    .filter(
+      (o) =>
+        (statusFilter === "all" || o.status === statusFilter) &&
+        (!query.trim() ||
+          `${o.customer} ${o.sticker}`.includes(query.trim()) ||
+          (!!query.replace(/\D/g, "") &&
+            o.phone.replace(/\D/g, "").includes(query.replace(/\D/g, "")))),
+    )
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   const req = requirements(state, date);
   const predicted = forecast(
     state,
@@ -900,22 +931,24 @@ export default function StoreApp() {
                     <CalendarPlus size={16} aria-hidden="true" /> 내일
                   </button>
                 </div>
-                <div className="segmented">
-                  {(["day", "week", "custom"] as const).map((r, i) => (
-                    <button
-                      key={r}
-                      className={range === r ? "selected" : ""}
-                      onClick={() => {
-                        setRange(r);
-                        if (r === "custom" && customEnd < date)
-                          setCustomEnd(date);
-                      }}
-                    >
-                      {["일간", "7일간", "기간 지정"][i]}
-                    </button>
-                  ))}
-                </div>
-                {range === "custom" && (
+                {view !== "production" && (
+                  <div className="segmented">
+                    {(["day", "week", "custom"] as const).map((r, i) => (
+                      <button
+                        key={r}
+                        className={range === r ? "selected" : ""}
+                        onClick={() => {
+                          setRange(r);
+                          if (r === "custom" && customEnd < date)
+                            setCustomEnd(date);
+                        }}
+                      >
+                        {["일간", "7일간", "기간 지정"][i]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {view !== "production" && range === "custom" && (
                   <label className="range-end">
                     종료일{" "}
                     <input
@@ -1110,8 +1143,33 @@ export default function StoreApp() {
           )}
           {view === "orders" && (
             <>
-              {ordersView === "list" && orderControls}
-              {ordersView !== "list" ? (
+              {(ordersView === "list" || query.trim()) && orderControls}
+              {query.trim() ? (
+                <section className="panel">
+                  <div className="panel-heading">
+                    <h2>검색 결과 {searchedOrders.length}건</h2>
+                    <label className="inline-label">
+                      <input
+                        type="checkbox"
+                        checked={searchAll}
+                        onChange={(e) => setSearchAll(e.target.checked)}
+                      />{" "}
+                      전체 기간
+                    </label>
+                  </div>
+                  {searchedOrders.map((order) => (
+                    <div key={order.id}>
+                      <div className="section-label">
+                        {koreanDate(order.date)}
+                      </div>
+                      <OrderCard order={order} />
+                    </div>
+                  ))}
+                  {!searchedOrders.length && (
+                    <Empty>검색한 주문이 없습니다.</Empty>
+                  )}
+                </section>
+              ) : ordersView !== "list" ? (
                 <OrderCalendar
                   view={ordersView}
                   date={date}
@@ -1124,6 +1182,7 @@ export default function StoreApp() {
                     if (customEnd < next) setCustomEnd(next);
                   }}
                   onNewOrder={() => open({ type: "order" })}
+                  onOrder={(order) => open({ type: "order", order })}
                   renderOrder={(order) => <OrderCard order={order} />}
                 />
               ) : (
@@ -1201,7 +1260,11 @@ export default function StoreApp() {
                 thinking={thinking}
                 onEdit={() => open({ type: "plan", plan })}
                 onComplete={(plan) => open({ type: "complete", plan })}
-                onRecommend={() => void recommend()}
+                onRecommend={() =>
+                  plan
+                    ? open({ type: "plan", plan, aiOpen: true })
+                    : void recommend()
+                }
                 onProduct={(product) =>
                   open({ type: "product", product, section: "production" })
                 }
@@ -1248,8 +1311,24 @@ export default function StoreApp() {
                   </span>
                 </div>
               )}
+              <div className="section-intro">
+                <input
+                  type="search"
+                  aria-label="재고 품목 검색"
+                  placeholder="품목 검색"
+                  value={inventoryQuery}
+                  onChange={(e) => setInventoryQuery(e.target.value)}
+                />
+                <button
+                  className="button secondary"
+                  aria-pressed={shortOnly}
+                  onClick={() => setShortOnly(!shortOnly)}
+                >
+                  <ListFilter size={16} /> 부족만 보기
+                </button>
+              </div>
               <section className="panel">
-                <div className="table-scroll">
+                <div className="table-scroll inventory-table">
                   <table>
                     <thead>
                       <tr>
@@ -1269,7 +1348,26 @@ export default function StoreApp() {
                     </thead>
                     <tbody>
                       {state.materials
-                        .filter((m) => m.kind === inventoryKind)
+                        .filter(
+                          (m) =>
+                            m.kind === inventoryKind &&
+                            m.name.includes(inventoryQuery.trim()) &&
+                            (!shortOnly ||
+                              m.stock < m.threshold ||
+                              (predicted.find((r) => r.id === m.id)?.shortage ||
+                                0) > 0),
+                        )
+                        .sort((a, b) => {
+                          const af = predicted.find((r) => r.id === a.id),
+                            bf = predicted.find((r) => r.id === b.id);
+                          return (
+                            Number(!!bf?.shortage || b.stock < b.threshold) -
+                              Number(!!af?.shortage || a.stock < a.threshold) ||
+                            (af?.firstShortage || "9999").localeCompare(
+                              bf?.firstShortage || "9999",
+                            )
+                          );
+                        })
                         .map((m) => {
                           const f = predicted.find((r) => r.id === m.id);
                           return (
@@ -1373,7 +1471,17 @@ export default function StoreApp() {
                         <div>
                           <b>{materialName(m.materialId)}</b>
                           <small>
-                            {m.reason} · {m.actor}
+                            {m.reason.replace(
+                              /^(receive|use|waste|count):/,
+                              (mode) =>
+                                ({
+                                  "receive:": "입고:",
+                                  "use:": "사용:",
+                                  "waste:": "폐기:",
+                                  "count:": "실사:",
+                                })[mode] || mode,
+                            )}{" "}
+                            · {m.actor}
                           </small>
                         </div>
                         <strong className={m.delta >= 0 ? "green-text" : ""}>
@@ -1490,6 +1598,7 @@ export default function StoreApp() {
                         <th>폐기</th>
                         <th>기타 출고</th>
                         <th>기록한 사람</th>
+                        <th>수정</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1511,6 +1620,39 @@ export default function StoreApp() {
                             <td>{c.waste}개</td>
                             <td>{c.other}개</td>
                             <td>{c.actor}</td>
+                            <td>
+                              <button
+                                className="text-button"
+                                title="이후 수령·마감 기록이 없는 최근 마감만 수정할 수 있습니다."
+                                disabled={
+                                  busy ||
+                                  state.closings.some(
+                                    (x) => x.lotId === c.lotId && x.at > c.at,
+                                  ) ||
+                                  state.lots.find((l) => l.id === c.lotId)
+                                    ?.remaining !== c.remaining ||
+                                  state.orders.some(
+                                    (o) =>
+                                      o.status === "picked" &&
+                                      (o.pickedAt || "") > c.at &&
+                                      o.pickupAllocations?.some(
+                                        (a) => a.lotId === c.lotId,
+                                      ),
+                                  )
+                                }
+                                onClick={() =>
+                                  open({
+                                    type: "close",
+                                    lot: state.lots.find(
+                                      (l) => l.id === c.lotId,
+                                    )!,
+                                    closing: c,
+                                  })
+                                }
+                              >
+                                <Pencil size={15} /> 수정
+                              </button>
+                            </td>
                           </tr>
                         ))}
                     </tbody>
@@ -1535,6 +1677,23 @@ export default function StoreApp() {
           )}
           {view === "settings" && (
             <>
+              <div className="filter-tabs">
+                {[
+                  ["menus", "메뉴 관리"],
+                  ["recommend", "추천 기준"],
+                  ["message", "예약문자"],
+                  ["shop", "매장 관리"],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    aria-pressed={settingsTab === id}
+                    className={settingsTab === id ? "active" : ""}
+                    onClick={() => setSettingsTab(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <button
                 className="button secondary"
                 onClick={() => setView("display")}
@@ -1548,14 +1707,16 @@ export default function StoreApp() {
                 <StickyNote size={18} />
                 스티커 제작 · 템플릿 관리
               </button>
-              <MenuManager
-                state={state}
-                onEdit={(product, section) =>
-                  open({ type: "product", product, section })
-                }
-              />
+              {settingsTab === "menus" && (
+                <MenuManager
+                  state={state}
+                  onEdit={(product, section) =>
+                    open({ type: "product", product, section })
+                  }
+                />
+              )}
               <div className="settings-grid">
-                <section className="panel">
+                <section className="panel" hidden={settingsTab !== "message"}>
                   <div className="panel-heading">
                     <h2>예약확인문자</h2>
                   </div>
@@ -1568,7 +1729,7 @@ export default function StoreApp() {
                     />
                   </div>
                 </section>
-                <section className="panel">
+                <section className="panel" hidden={settingsTab !== "recommend"}>
                   <div className="panel-heading">
                     <h2>
                       <Sparkles size={18} /> 오늘의 메뉴 추천 기준
@@ -1597,7 +1758,7 @@ export default function StoreApp() {
                     </button>
                   </div>
                 </section>
-                <section className="panel">
+                <section className="panel" hidden={settingsTab !== "shop"}>
                   <div className="panel-heading">
                     <h2>
                       <Users size={18} /> 매장 관리
@@ -1769,6 +1930,9 @@ export default function StoreApp() {
             ) {
               setModal({ ...modal, pickerOpen: false });
             } else {
+              if (modalDirty && !confirm("저장하지 않은 변경사항을 닫을까요?"))
+                return;
+              setModalDirty(false);
               setModal(null);
             }
           }}
@@ -1792,6 +1956,7 @@ export default function StoreApp() {
           {modal.type === "order" && (
             <>
               <OrderForm
+                onDirtyChange={setModalDirty}
                 state={state}
                 order={modal.order}
                 date={date}
@@ -1840,6 +2005,7 @@ export default function StoreApp() {
           )}
           {modal.type === "plan" && (
             <PlanForm
+              onDirtyChange={setModalDirty}
               state={state}
               date={date}
               plan={modal.plan}
@@ -1868,6 +2034,28 @@ export default function StoreApp() {
           {modal.type === "close" && (
             <CloseForm
               lot={modal.lot}
+              closing={modal.closing}
+              picked={(() => {
+                const previous =
+                  state.closings
+                    .filter(
+                      (x) =>
+                        x.lotId === modal.lot.id &&
+                        (!modal.closing || x.at < modal.closing.at),
+                    )
+                    .at(-1)?.at || "";
+                return state.orders
+                  .filter(
+                    (o) =>
+                      o.status === "picked" &&
+                      (o.pickedAt || "") > previous &&
+                      (!modal.closing ||
+                        (o.pickedAt || "") <= modal.closing.at),
+                  )
+                  .flatMap((o) => o.pickupAllocations || [])
+                  .filter((a) => a.lotId === modal.lot.id)
+                  .reduce((n, a) => n + a.pieces, 0);
+              })()}
               product={state.products.find(
                 (p) => p.id === modal.lot.productId,
               )!}

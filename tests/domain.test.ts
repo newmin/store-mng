@@ -275,6 +275,51 @@ describe("생산 완료 · 차감 · 마감", () => {
       "2026-11-05T09:00:00Z",
     );
     expect(s.closings[0].soldEstimate).toBe(35);
+    const corrected = applyCommand(
+      s,
+      {
+        type: "amendClosing",
+        id: s.closings[0].id,
+        remaining: 6,
+        waste: 4,
+        other: 3,
+      },
+      "매장",
+    );
+    expect(corrected.lots[0].remaining).toBe(6);
+    expect(corrected.closings[0].soldEstimate).toBe(35);
+    const later = structuredClone(s);
+    later.closings.push({
+      ...later.closings[0],
+      id: "later-close",
+      at: "2026-11-06T09:00:00Z",
+    });
+    expect(() =>
+      applyCommand(
+        later,
+        {
+          type: "amendClosing",
+          id: s.closings[0].id,
+          remaining: 6,
+          waste: 4,
+          other: 3,
+        },
+        "매장",
+      ),
+    ).toThrow("이후 수령·마감");
+    expect(() =>
+      applyCommand(
+        s,
+        {
+          type: "amendClosing",
+          id: s.closings[0].id,
+          remaining: 999,
+          waste: 0,
+          other: 0,
+        },
+        "매장",
+      ),
+    ).toThrow("가용 수량");
     expect(() =>
       applyCommand(
         s,

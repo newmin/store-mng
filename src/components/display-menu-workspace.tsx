@@ -243,6 +243,22 @@ export function DisplayMenuWorkspace({
           </div>
         )}
       </fieldset>
+      {dirty && (
+        <div className="display-save-bar">
+          <span>{Object.keys(edits).length}종 변경</span>
+          <button
+            type="button"
+            disabled={disabled}
+            className="button secondary"
+            onClick={() => setEdits({})}
+          >
+            <Undo2 size={16} /> 취소
+          </button>
+          <button type="submit" disabled={disabled} className="button primary">
+            <Save size={16} /> 저장
+          </button>
+        </div>
+      )}
     </form>
   );
 }

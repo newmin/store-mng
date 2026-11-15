@@ -435,9 +435,13 @@ export function applyCommand(
       for (const target of c.targets) {
         const product = findProduct(target.productId);
         if (product.displayTarget !== target.expectedTarget)
-          throw new Error(`${product.name} 진열 목표가 변경됐습니다. 변경 취소 후 다시 선택해 주세요.`);
+          throw new Error(
+            `${product.name} 진열 목표가 변경됐습니다. 변경 취소 후 다시 선택해 주세요.`,
+          );
         if (target.displayTarget > 0 && (!product.active || product.archived))
-          throw new Error(`${product.name}: 판매 중인 메뉴만 상시 진열할 수 있습니다.`);
+          throw new Error(
+            `${product.name}: 판매 중인 메뉴만 상시 진열할 수 있습니다.`,
+          );
       }
       for (const target of c.targets)
         findProduct(target.productId).displayTarget = target.displayTarget;
@@ -646,6 +650,56 @@ export function applyCommand(
       p.completedBy = actor;
       invalidate();
       message = "생산 완료 및 재료 차감";
+      break;
+    }
+    case "amendClosing": {
+      const closing = s.closings.find((x) => x.id === c.id);
+      const lot = s.lots.find((l) => l.id === closing?.lotId);
+      if (!closing || !lot) throw new Error("마감 기록을 찾을 수 없습니다.");
+      if (
+        s.closings.some((x) => x.lotId === lot.id && x.at > closing.at) ||
+        lot.remaining !== closing.remaining ||
+        s.orders.some(
+          (o) =>
+            o.status === "picked" &&
+            (o.pickedAt || "") > closing.at &&
+            o.pickupAllocations?.some((a) => a.lotId === lot.id),
+        )
+      )
+        throw new Error(
+          "이후 수령·마감 기록이 있어 이 마감은 수정할 수 없습니다.",
+        );
+      const previous =
+        s.closings.filter((x) => x.lotId === lot.id && x.at < closing.at).at(-1)
+          ?.at || "";
+      const picked = s.orders
+        .filter(
+          (o) =>
+            o.status === "picked" &&
+            (o.pickedAt || "") > previous &&
+            (o.pickedAt || "") <= closing.at,
+        )
+        .flatMap((o) => o.pickupAllocations || [])
+        .filter((a) => a.lotId === lot.id)
+        .reduce((n, a) => n + a.pieces, 0);
+      const available =
+        closing.remaining +
+        closing.waste +
+        closing.other +
+        closing.soldEstimate -
+        picked;
+      if (c.remaining + c.waste + c.other > available)
+        throw new Error("잔량·폐기·기타 출고 합계가 가용 수량을 초과합니다.");
+      if (closing.date > lot.expires && c.remaining)
+        throw new Error("판매 가능 기간이 지난 품목은 폐기로 기록하세요.");
+      closing.soldEstimate =
+        available - c.remaining - c.waste - c.other + picked;
+      closing.remaining = c.remaining;
+      closing.waste = c.waste;
+      closing.other = c.other;
+      lot.remaining = c.remaining;
+      invalidate();
+      message = "마감 기록 수정";
       break;
     }
     case "closeLot": {

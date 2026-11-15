@@ -197,7 +197,9 @@ export function ProductionWorkspace({
                 {thinking
                   ? "AI 추천 중…"
                   : state.settings.initialized
-                    ? "AI 메뉴 추천"
+                    ? plan
+                      ? "AI 추가 추천"
+                      : "AI 메뉴 추천"
                     : "AI 추천 기준 설정"}
               </button>
             )}

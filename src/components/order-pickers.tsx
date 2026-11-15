@@ -498,11 +498,13 @@ export function MenuPicker({
   selectedIds,
   onSelect,
   onClose,
+  multiple = false,
 }: {
   products: Product[];
   selectedIds: string[];
   onSelect: (p: Product) => void;
   onClose: () => void;
+  multiple?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<"all" | keyof typeof menuCategories>(
@@ -554,6 +556,7 @@ export function MenuPicker({
             key={p.id}
             className="menu-picker-card"
             onClick={() => onSelect(p)}
+            disabled={multiple && selectedIds.includes(p.id)}
             aria-label={`${p.name} 선택`}
           >
             <RiceThumbnail product={p} />
@@ -578,6 +581,13 @@ export function MenuPicker({
             ? "검색 결과 없음"
             : "매장 설정에서 판매할 메뉴를 먼저 등록해 주세요."}
         </p>
+      )}
+      {multiple && (
+        <div className="form-footer">
+          <button type="button" className="button primary" onClick={onClose}>
+            <Check size={16} /> 선택 완료 · {selectedIds.length}종
+          </button>
+        </div>
       )}
     </PickerDialog>
   );

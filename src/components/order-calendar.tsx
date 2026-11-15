@@ -28,6 +28,7 @@ export function OrderCalendar({
   controls,
   onDate,
   onNewOrder,
+  onOrder,
   renderOrder,
 }: {
   view: CalendarView;
@@ -38,6 +39,7 @@ export function OrderCalendar({
   controls: ReactNode;
   onDate: (date: string) => void;
   onNewOrder: () => void;
+  onOrder: (order: Order) => void;
   renderOrder: (order: Order) => ReactNode;
 }) {
   const detail = useRef<HTMLElement>(null);
@@ -151,7 +153,7 @@ export function OrderCalendar({
                     <button
                       key={order.id}
                       className={`reservation-event ${order.status}`}
-                      onClick={() => selectDay(day, true)}
+                      onClick={() => onOrder(order)}
                       aria-label={`${order.time} ${order.customer}, ${statuses[order.status]}, ${fulfillmentLabel(order.fulfillment)}, ${items(order)}`}
                     >
                       <span className="reservation-event-title">

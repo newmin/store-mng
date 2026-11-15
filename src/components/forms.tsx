@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Notice } from "./notice";
 import { DailyMenuPicker } from "./daily-menu-picker";
 import { PlanRecommendations } from "./plan-recommendations";
@@ -37,6 +37,7 @@ import type {
   Product,
   StoreState,
   Lot,
+  Closing,
 } from "@/lib/types";
 type Save = (c: Command) => Promise<void>;
 const field = (f: FormData, name: string) => String(f.get(name) || "");
@@ -62,11 +63,13 @@ export function OrderForm({
   order,
   date,
   save,
+  onDirtyChange,
 }: {
   state: StoreState;
   order?: Order;
   date: string;
   save: Save;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [kind, setKind] = useState<Order["kind"]>(order?.kind || "single");
   const [lines, setLines] = useState<OrderLine[]>(order?.lines || []);
@@ -85,6 +88,7 @@ export function OrderForm({
   const [saving, setSaving] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [formError, setFormError] = useState("");
+  const [invalidField, setInvalidField] = useState("");
   const voiceDraft: VoiceOrderDraft = {
     customer,
     phone,
@@ -97,6 +101,10 @@ export function OrderForm({
     lines,
     sticker,
   };
+  const initialDraft = useRef(JSON.stringify(voiceDraft));
+  useEffect(() => {
+    onDirtyChange?.(JSON.stringify(voiceDraft) !== initialDraft.current);
+  }, [JSON.stringify(voiceDraft), onDirtyChange]);
   function applyVoiceDraft(draft: VoiceOrderDraft) {
     setCustomer(draft.customer);
     setPhone(draft.phone);
@@ -129,7 +137,7 @@ export function OrderForm({
         productId: p.id,
         piecesPerUnit: lines[menuPicker].unit === "box" ? p.boxSize : 1,
       });
-    setMenuPicker(null);
+    if (menuPicker !== "add") setMenuPicker(null);
   }
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -185,11 +193,23 @@ export function OrderForm({
   return (
     <form
       onSubmit={submit}
+      onInputCapture={() => setInvalidField("")}
       onInvalidCapture={(e) => {
         e.preventDefault();
-        setFormError(
-          "필수 입력값을 확인해 주세요. 고객명·수령 날짜·수령 방식·수량을 확인해 주세요.",
+        const first = e.currentTarget.querySelector<HTMLInputElement>(
+          "input:invalid, select:invalid, textarea:invalid",
         );
+        if (e.target !== first) return;
+        first?.focus();
+        first?.scrollIntoView({ block: "center", behavior: "smooth" });
+        const label =
+          first?.getAttribute("aria-label") ||
+          first?.closest("label")?.textContent?.trim() ||
+          "입력값";
+        setFormError(
+          `${label}: ${first?.validationMessage || "값을 확인해 주세요."}`,
+        );
+        setInvalidField(first?.name || "");
       }}
     >
       <OrderVoiceInput
@@ -208,12 +228,16 @@ export function OrderForm({
             고객명{" "}
             <input
               name="customer"
+              aria-invalid={invalidField === "customer" || undefined}
               value={customer}
               onChange={(e) => setCustomer(e.target.value)}
               required
               placeholder="예약자 성함"
               maxLength={80}
             />
+            {invalidField === "customer" && (
+              <small className="danger-text">고객명을 입력해 주세요.</small>
+            )}
           </label>
           <label>
             연락처{" "}
@@ -353,6 +377,7 @@ export function OrderForm({
         </button>
         {menuPicker !== null && (
           <MenuPicker
+            multiple={menuPicker === "add"}
             products={state.products}
             selectedIds={lines.map((l) => l.productId)}
             onSelect={selectProduct}
@@ -462,6 +487,14 @@ export function StockForm({
   material: Material;
   save: Save;
 }) {
+  const [mode, setMode] = useState("receive");
+  const [quantity, setQuantity] = useState("");
+  const [scale, setScale] = useState(1);
+  const amount = Number(quantity) * scale;
+  const after =
+    mode === "count"
+      ? amount
+      : material.stock + (mode === "receive" ? amount : -amount);
   return (
     <form
       onSubmit={async (e) => {
@@ -471,7 +504,7 @@ export function StockForm({
           type: "adjustStock",
           materialId: material.id,
           mode: field(f, "mode") as "receive",
-          quantity: num(f, "quantity"),
+          quantity: amount,
           note: field(f, "note"),
         });
       }}
@@ -485,7 +518,11 @@ export function StockForm({
       <div className="form-grid">
         <label>
           처리 종류{" "}
-          <select name="mode">
+          <select
+            name="mode"
+            value={mode}
+            onChange={(e) => setMode(e.target.value)}
+          >
             <option value="receive">입고</option>
             <option value="use">사용</option>
             <option value="waste">폐기</option>
@@ -493,10 +530,56 @@ export function StockForm({
           </select>
         </label>
         <label>
-          수량 ({material.unit}){" "}
-          <input name="quantity" type="number" min={0} step="any" required />
+          {
+            {
+              receive: "입고할 수량",
+              use: "사용한 수량",
+              waste: "폐기한 수량",
+              count: "현재 실제 잔량",
+            }[mode]
+          }{" "}
+          (
+          {scale === 1000
+            ? material.unit === "g"
+              ? "kg"
+              : "L"
+            : material.unit}
+          )
+          <input
+            name="quantity"
+            type="number"
+            min={0}
+            step="any"
+            required
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+          />
+          {(material.unit === "g" || material.unit === "ml") && (
+            <select
+              aria-label="입출고 입력 단위"
+              value={scale}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setQuantity(
+                  quantity ? String((Number(quantity) * scale) / next) : "",
+                );
+                setScale(next);
+              }}
+            >
+              <option value={1}>{material.unit}</option>
+              <option value={1000}>{material.unit === "g" ? "kg" : "L"}</option>
+            </select>
+          )}
         </label>
       </div>
+      {quantity !== "" && (
+        <p className={after < 0 ? "callout danger-text" : "callout"}>
+          현재 {material.stock.toLocaleString()}
+          {material.unit} → 반영 후 {after.toLocaleString()}
+          {material.unit}
+          {after < 0 && " · 재고가 부족합니다."}
+        </p>
+      )}
       <label>
         기록 사유{" "}
         <input
@@ -506,7 +589,7 @@ export function StockForm({
           maxLength={300}
         />
       </label>
-      <Footer label="재고 반영하기" />
+      <Footer label="재고 반영하기" disabled={after < 0} />
     </form>
   );
 }
@@ -521,6 +604,7 @@ export function PlanForm({
   setAiOpen,
   recommend,
   save,
+  onDirtyChange,
 }: {
   state: StoreState;
   date: string;
@@ -535,6 +619,7 @@ export function PlanForm({
     signal: AbortSignal,
   ) => Promise<{ lines: Plan["lines"]; questions: string[] }>;
   save: Save;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [id] = useState(() => plan?.id || uid());
   const [saving, setSaving] = useState(false);
@@ -545,6 +630,10 @@ export function PlanForm({
         .filter((r) => r.batches > 0)
         .map((r) => ({ productId: r.product.id, batches: r.batches })),
   );
+  const originalLines = useRef(JSON.stringify(lines));
+  useEffect(() => {
+    onDirtyChange?.(JSON.stringify(lines) !== originalLines.current);
+  }, [lines, onDirtyChange]);
   const usage = materialUsage(state, lines);
   const reservationNeeds = requirements(state, date, false);
   const materials = Object.entries(usage.usage)
@@ -983,16 +1072,42 @@ export function CloseForm({
   lot,
   product,
   save,
+  closing,
+  picked = 0,
 }: {
   lot: Lot;
   product: Product;
   save: Save;
+  closing?: Closing;
+  picked?: number;
 }) {
+  const available = closing
+    ? closing.remaining +
+      closing.waste +
+      closing.other +
+      closing.soldEstimate -
+      picked
+    : lot.remaining;
+  const [remaining, setRemaining] = useState(String(closing?.remaining ?? ""));
+  const [waste, setWaste] = useState(String(closing?.waste ?? 0));
+  const [other, setOther] = useState(String(closing?.other ?? 0));
+  const sold =
+    available - Number(remaining) - Number(waste) - Number(other) + picked;
   return (
     <form
       onSubmit={async (e) => {
         e.preventDefault();
         const f = new FormData(e.currentTarget);
+        if (closing) {
+          await save({
+            type: "amendClosing",
+            id: closing.id,
+            remaining: Number(remaining),
+            waste: Number(waste),
+            other: Number(other),
+          });
+          return;
+        }
         await save({
           type: "closeLot",
           lotId: lot.id,
@@ -1004,7 +1119,7 @@ export function CloseForm({
       }}
     >
       <div className="callout">
-        기록 전 잔량 {lot.remaining}개 · 판매 가능 기한 {lot.expires}
+        기록 전 잔량 {available}개 · 판매 가능 기한 {lot.expires}
       </div>
       <label>
         마감 날짜{" "}
@@ -1013,7 +1128,8 @@ export function CloseForm({
           type="date"
           min={lot.date}
           max={today()}
-          defaultValue={today()}
+          defaultValue={closing?.date || today()}
+          disabled={!!closing}
           required
         />
       </label>
@@ -1024,9 +1140,10 @@ export function CloseForm({
             name="remaining"
             type="number"
             min={0}
-            max={lot.remaining}
+            max={available}
             required
-            defaultValue={0}
+            value={remaining}
+            onChange={(e) => setRemaining(e.target.value)}
           />
         </label>
         <label>
@@ -1035,9 +1152,10 @@ export function CloseForm({
             name="waste"
             type="number"
             min={0}
-            max={lot.remaining}
+            max={available}
             required
-            defaultValue={0}
+            value={waste}
+            onChange={(e) => setWaste(e.target.value)}
           />
         </label>
         <label>
@@ -1046,12 +1164,30 @@ export function CloseForm({
             name="other"
             type="number"
             min={0}
-            max={lot.remaining}
+            max={available}
             required
-            defaultValue={0}
+            value={other}
+            onChange={(e) => setOther(e.target.value)}
           />
         </label>
       </div>
+      <button
+        type="button"
+        className="button secondary"
+        onClick={() => {
+          setRemaining("0");
+          setWaste("0");
+          setOther("0");
+        }}
+      >
+        전량 판매
+      </button>
+      {remaining !== "" && (
+        <p className="callout">
+          판매 추정 {sold}개 · 남은 수량 {remaining}개 · 폐기 {waste}개 · 기타{" "}
+          {other}개{sold < picked && " · 입력 합계가 가용 수량을 초과합니다."}
+        </p>
+      )}
       <p className="muted small">
         {product.shelfDays === 1
           ? "당일 판매 · 잔량 이월 안 됨"
@@ -1059,7 +1195,10 @@ export function CloseForm({
         <br />
         판매 추정량에 예약 수령 포함
       </p>
-      <Footer label="마감 기록하기" />
+      <Footer
+        label={closing ? "마감 수정하기" : "마감 기록하기"}
+        disabled={remaining === "" || sold < picked}
+      />
     </form>
   );
 }

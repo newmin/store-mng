@@ -145,3 +145,69 @@
     flex-basis: 100%;
   }
 }
+.display-save-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-raised);
+}
+.display-save-bar > span {
+  margin-right: auto;
+  font-size: 13px;
+}
+@media (max-width: 640px) {
+  .display-save-bar {
+    bottom: 76px;
+  }
+}
+.settings-grid > [hidden] {
+  display: none;
+}
+@media (max-width: 640px) {
+  .inventory-table {
+    overflow: visible;
+  }
+  .inventory-table table,
+  .inventory-table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  .inventory-table thead {
+    display: none;
+  }
+  .inventory-table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 12px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .inventory-table td {
+    display: block;
+    padding: 8px;
+    border: 0;
+  }
+  .inventory-table td:first-child,
+  .inventory-table td:last-child {
+    grid-column: 1 / -1;
+  }
+  .inventory-table td:nth-child(2)::before {
+    content: "현재 재고 · ";
+  }
+  .inventory-table td:nth-child(3):not(:last-child)::before {
+    content: "예약 필요 · ";
+  }
+  .inventory-table td:nth-child(4):not(:last-child)::before {
+    content: "진열 예상 · ";
+  }
+  .inventory-table td:nth-child(5):not(:last-child)::before {
+    content: "예상 부족 · ";
+  }
+}
